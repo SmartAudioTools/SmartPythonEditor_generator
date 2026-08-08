@@ -6,7 +6,7 @@ par reconstruction complete :
 
     ./reconstruire.sh [--push] [<version>]
 
-repart de l'etiquette officielle `v<version>` (par defaut : la version des artefacts de `derives/`),
+repart de l'etiquette officielle `v<version>` (par defaut : la version lue dans `requirements-smartos/` du fork),
 rejoue les ~67 correctifs de `spyder_patch/` (ancres par AST, idempotents, echec bruyant si un point
 d'insertion a disparu), pose l'habillage (`fork_files/`) et le support d'installation autonome
 (`smartos-support/`, `install.sh`, `smartos-requirements.txt`), committe et tague `smartos-<version>`.
@@ -23,16 +23,18 @@ Sans `--push`, tout reste local.
 - `ressources/` - fichiers consommes par les correctifs (icones, module du moteur de scenarios).
 - `outils/generate_spyder_requirements.sh` - recupere la DERNIERE release officielle de Spyder
   (installeur `constructor`), gele les versions de toutes ses dependances et les plages de binding
-  Qt acceptees, et ecrit le tout dans `derives/`. C'est l'outil de montee de version.
+  Qt acceptees, et les ecrit dans le depot du FORK (`SmartPythonEditor/requirements-smartos/`,
+  clone a cote de ce depot) : la version du produit appartient au produit. `reconstruire.sh` les
+  y PRESERVE a travers ses reconstructions. C'est l'outil de montee de version.
 - `outils/preparer_config_reference.py` - regenere `derives/config-reference/` (configuration
   initiale purgee) depuis une configuration SmartOS de reference.
-- `derives/` - artefacts GENERES et committes : requirements figes, plages Qt, config de
-  reference. Ce sont eux que lit `reconstruire.sh` - une reconstruction n'a besoin de rien
-  d'autre que ce depot et le reseau.
+- `derives/` - artefacts generes committes ici : la config de reference purgee
+  (`config-reference/`). Les requirements figes, eux, vivent dans le fork
+  (`requirements-smartos/`).
 
 ## Montee de version de Spyder
 
-1. `outils/generate_spyder_requirements.sh` (met a jour `derives/`).
+1. `outils/generate_spyder_requirements.sh` (met a jour `requirements-smartos/` du fork).
 2. `./reconstruire.sh` - les correctifs dont l'ancrage a disparu echouent bruyamment : les
    corriger dans `spyder_patch/`, relancer.
 3. `./reconstruire.sh --push` puis committer/pousser ce depot.
