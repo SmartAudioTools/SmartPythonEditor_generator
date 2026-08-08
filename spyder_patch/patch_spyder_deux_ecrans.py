@@ -379,6 +379,25 @@ BLOC = '''    # SmartOS (patch_spyder_deux_ecrans.py) : mode DEUX ECRANS. Cf. l'
         except Exception:
             # Un mode d'affichage ne doit jamais emporter Spyder avec lui.
             logger.exception("Bascule du mode deux ecrans impossible")
+        self._smartos_recentrer_rangee()
+
+    def _smartos_recentrer_rangee(self):
+        """
+        Rejouer le centrage du groupe du milieu (publie sur main par patch_spyder_burger_menu.py).
+
+        La bascule passe par restoreState() SANS redimensionner la fenetre principale (le second
+        ecran a sa PROPRE fenetre) : sig_resized ne tire donc pas, et la DragArea gauche garderait
+        la largeur figee calculee dans l'autre mode - les boutons du milieu ne revenaient pas au
+        milieu en sortant du mode deux ecrans (releve utilisateur du 08/08/2026). Deux passes
+        differees, comme au demarrage : les largeurs des barres ne sont definitives qu'une fois la
+        rangee reposee par la boucle d'evenements.
+        """
+        recentrer = getattr(self.main, "_smartos_recentrer_barres", None)
+        if recentrer is None:
+            return
+        from qtpy.QtCore import QTimer as _SmartosQTimerEcrans
+        _SmartosQTimerEcrans.singleShot(0, recentrer)
+        _SmartosQTimerEcrans.singleShot(400, recentrer)
 
     def _smartos_entrer_deux_ecrans(self):
         from qtpy.QtCore import Qt as _SmartosQt

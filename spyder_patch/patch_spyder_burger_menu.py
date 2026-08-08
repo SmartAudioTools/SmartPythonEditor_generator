@@ -230,6 +230,13 @@ NEW_METHODS = '''    def _build_burger_menu(self):
             drag.setFixedWidth(
                 max(0, main.width() // 2 - pinned - group_w // 2))
 
+        # PUBLIE sur main : la bascule deux ecrans (patch_spyder_deux_ecrans.py) passe par
+        # restoreState() SANS redimensionner la fenetre principale (le second ecran a sa propre
+        # fenetre), donc ni sig_resized ni la bascule du burger ne rejouent le recentrage - la
+        # DragArea gauche garde la largeur figee calculee dans l'autre mode (releve utilisateur
+        # du 08/08/2026 : « les boutons du milieu ne retournent pas au milieu »).
+        main._smartos_recentrer_barres = _recenter
+
         # Placement DIFFERE en fin de boucle d'evenements (QTimer.singleShot), apres que le plugin
         # Toolbar a dispose ses barres - meme technique que spyder_window_controls. Ordre vise :
         # burger, Fichiers, DragArea gauche, puis le groupe. L'ancre est la barre du groupe la plus
