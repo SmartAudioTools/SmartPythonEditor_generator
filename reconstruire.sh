@@ -98,6 +98,9 @@ if [ -d "$FORK_DIR/requirements-smartos" ]; then
   SAUVE_REQUIREMENTS="$(mktemp -d)"
   cp -r "$FORK_DIR/requirements-smartos/." "$SAUVE_REQUIREMENTS/"
 fi
+# Les modifications locales (ex. requirements-smartos fraichement regeneres) sont DEJA
+# sauvegardees ci-dessus : on peut remettre l'arbre a plat, sinon checkout refuse.
+git reset --hard -q HEAD 2>/dev/null || true
 git checkout -B "$BRANCH" "refs/tags/v${VERSION}"
 git clean -fdx
 git reset --hard "refs/tags/v${VERSION}"

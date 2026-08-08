@@ -511,6 +511,20 @@ with open(qt_path, "w") as f:
         paquet, (mini, maxi) = qt_infos[cle]
         f.write(f"{cle}={paquet},{mini},{maxi}\n")
         print(f"  binding : {cle} -> {paquet}>={mini},<{maxi}")
+
+# Binding Qt directement dans le requirements simplifie (08/08/2026, demande utilisateur) :
+# PySide6 dans la plage exacte de check_qt(), repli PyQt6 pour aarch64 (aucune roue PySide6).
+# Le setup.py du fork declare la meme contrainte (patch_spyder_pyside6_deps) ; ici on la fige
+# au meme titre que le reste de la pile.
+with open(simple_path, "a") as f:
+    paquet6, (mini6, maxi6) = qt_infos["pyside6"]
+    paquetq6, (miniq6, maxiq6) = qt_infos["pyqt6"]
+    f.write("# Binding Qt (plage de check_qt(), cf. qt_bindings_Spyder-*.txt) ; aarch64 en\n"
+            "# PyQt6, PySide6 n'y publiant aucune roue.\n")
+    f.write(f'{paquet6}>={mini6},<{maxi6}; platform_machine != "aarch64"\n')
+    f.write(f'{paquetq6}>={miniq6},<{maxiq6}; platform_machine == "aarch64"\n')
+    f.write(f'{paquetq6}-WebEngine>={miniq6},<{maxiq6}; platform_machine == "aarch64"\n')
+    print(f"  binding epingle dans le requirements : {paquet6}>={mini6},<{maxi6} (+ pyqt6 aarch64)")
 PYEOF
 
 # Dossier de config (spyder.ini/transient.ini) attendu par installation_SmartPythonEditor.sh

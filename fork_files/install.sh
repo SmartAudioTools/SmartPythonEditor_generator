@@ -76,24 +76,10 @@ echo "== Installation de SmartPythonEditor et de sa pile figee (pip)"
 ( cd "$ICI" && "$VENV_PY" -m pip install -r smartos-requirements.txt )
 
 # ----------------------------------------------------------------- binding Qt
-# Un seul binding doit rester dans l'environnement : qtpy charge celui deja present dans
-# sys.modules, deux bindings cohabitants rendent le choix dependant de l'ordre des imports.
-# La plage de versions vient du Spyder officiel (spyder/requirements.py:check_qt), relevee
-# a la construction du fork. PySide6 n'a aucune roue aarch64 : repli PyQt6 sur cette
-# architecture.
-CLE_BINDING=pyside6
-[ "$(uname -m)" = "aarch64" ] && CLE_BINDING=pyqt6
-LIGNE="$(grep "^$CLE_BINDING=" "$SUPPORT/qt_bindings.txt")" || {
-    echo "ECHEC : binding '$CLE_BINDING' absent de $SUPPORT/qt_bindings.txt" >&2; exit 1; }
-PAQUET="${LIGNE#*=}"; PAQUET="${PAQUET%%,*}"
-MINI="$(echo "$LIGNE" | cut -d, -f2)"
-MAXI="$(echo "$LIGNE" | cut -d, -f3)"
-echo "== Binding Qt : $PAQUET>=$MINI,<$MAXI"
-"$VENV_PY" -m pip uninstall -y -q \
-    PyQt5 PyQt5-Qt5 PyQt5-sip PyQtWebEngine PyQtWebEngine-Qt5 \
-    PyQt6 PyQt6-Qt6 PyQt6-sip PyQt6-WebEngine PyQt6-WebEngine-Qt6 \
-    PySide6 PySide6-Essentials PySide6-Addons shiboken6 2>/dev/null || true
-"$VENV_PY" -m pip install "$PAQUET>=$MINI,<$MAXI"
+# Rien a faire (08/08/2026) : le binding est porte par les REQUIREMENTS et par le setup.py
+# du fork (PySide6 dans la plage acceptee par check_qt(), PyQt6 sur aarch64 - marqueurs
+# d'environnement). L'ancien cycle desinstallation/reinstallation n'a plus d'objet : plus
+# rien ne tire PyQt5.
 
 # ----------------------------------------------------------------- greffons
 installer_greffon() {  # installer_greffon <nom> <url>

@@ -491,3 +491,20 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
   # Le canevas du splash est en proportions fixes cote code : aligne sur le nouveau visuel.
   python3 "$GEN_DIR/spyder_patch/patch_spyder_splash_size.py" \
     "$ROOT/spyder/app/utils.py"
+  # --- Dependances pip du fork : PySide6 par defaut (08/08/2026, demande utilisateur) ----
+  # Seulement sur l'ARBRE du fork (setup.py) - un site-packages n'en a pas, et ses
+  # dependances sont deja resolues. La plage vient de qt_bindings_Spyder-<v>.txt du fork
+  # (releve du check_qt() officiel par l'outil de montee de version).
+  if [ -f "$ROOT/setup.py" ]; then
+    QT_BINDINGS_FICHIER=$(ls "$ROOT"/requirements-smartos/qt_bindings_Spyder-*.txt 2>/dev/null | head -1)
+    if [ -z "$QT_BINDINGS_FICHIER" ]; then
+      echo "ERREUR : qt_bindings_Spyder-*.txt introuvable dans $ROOT/requirements-smartos/" >&2
+      echo "         (lancer outils/generate_spyder_requirements.sh d'abord)." >&2
+      exit 1
+    fi
+    LIGNE_PYSIDE6=$(grep '^pyside6=' "$QT_BINDINGS_FICHIER")
+    PYSIDE6_MINI=$(echo "$LIGNE_PYSIDE6" | cut -d, -f2)
+    PYSIDE6_MAXI=$(echo "$LIGNE_PYSIDE6" | cut -d, -f3)
+    python3 "$GEN_DIR/spyder_patch/patch_spyder_pyside6_deps.py" \
+      "$ROOT/setup.py" "$PYSIDE6_MINI" "$PYSIDE6_MAXI"
+  fi
