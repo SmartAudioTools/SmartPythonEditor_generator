@@ -213,5 +213,6 @@ echo "  - KDE Wayland : installer 'kdotool' pour que la fenetre deja ouverte rem
 echo "    premier plan quand un fichier lui est transmis (sinon repli silencieux)."
 echo "  - Terminal integre / panneau Claude : compiler le binding QTermWidget -"
 echo "    voir qtermwidget_binding/build.sh dans le depot du greffon smartos_konsole."
-echo "  - KDE : le greffon window_controls remplace la barre de titre ; pour masquer celle"
-echo "    du systeme, ajouter une regle KWin 'Pas de barre de titre' sur la classe spyder."
+echo "  - KDE : le greffon window_controls pose LUI-MEME la regle KWin 'sans cadre' et le"
+echo "    schema de couleurs de la barre de titre au premier demarrage (option integration_kde"
+echo "    pour le desactiver)."
