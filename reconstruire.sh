@@ -10,7 +10,7 @@
 #              reconstruction strictement LOCALE, rien n'est publie - pour verifier que tous les
 #              correctifs s'appliquent avant de rendre le resultat visible/installable.
 #   <version>  version Spyder visee (ex. 6.1.5). Par defaut, la plus recente detectee dans
-#              Commun/requirements/ (meme detection que installation_SmartPythonEditor.sh).
+#              requirements-smartos/ du fork (meme detection que installation_SmartPythonEditor.sh).
 #
 # Ce que fait ce script, dans l'ordre :
 #   1. Determine la version visee.
@@ -47,14 +47,14 @@ done
 
 if [ -z "$VERSION" ]; then
   # Meme detection que installation_SmartPythonEditor.sh (dernier requirements_Spyder-*_py*.txt disponible).
-  REQ_FILENAME=$(find "$GEN_DIR/derives" -maxdepth 1 -name "requirements_Spyder-*_py*.txt" ! -name "*_full.txt" -printf '%f\n' \
+  REQ_FILENAME=$(find "$FORK_DIR/requirements-smartos" -maxdepth 1 -name "requirements_Spyder-*_py*.txt" ! -name "*_full.txt" -printf '%f\n' \
     | sed -E 's/^requirements_Spyder-([^_]+(_[^_]+)*)_py([0-9]+\.[0-9]+)\.txt$/\1 \3/' \
     | sort -k1,1V | tail -1 | awk '{print $1}')
   VERSION="$REQ_FILENAME"
 fi
 if [ -z "$VERSION" ]; then
-  echo "Version Spyder introuvable (aucun requirements_Spyder-*.txt dans $GEN_DIR/derives/)." >&2
-  echo "Passez-la explicitement en argument, ex. : reconstruire_fork_spyder.sh 6.1.5" >&2
+  echo "Version Spyder introuvable (aucun requirements_Spyder-*.txt dans $FORK_DIR/requirements-smartos/)." >&2
+  echo "Lancez d'abord outils/generate_spyder_requirements.sh, ou passez la version en argument." >&2
   exit 1
 fi
 echo "Version Spyder visee : $VERSION"
@@ -89,9 +89,23 @@ if ! git rev-parse -q --verify "refs/tags/v${VERSION}^{commit}" >/dev/null; then
 fi
 
 echo "Reconstruction de la branche $BRANCH depuis v${VERSION} (arbre entierement remplace)..."
+# requirements-smartos/ appartient au PRODUIT (nom dedie : l'amont a DEJA un
+# dossier requirements/ a lui, ses env conda - ne jamais melanger) (version gelee, dependances, plages Qt - ecrits par
+# outils/generate_spyder_requirements.sh) : il est PRESERVE a travers la reconstruction,
+# comme les modules du fork spyder_line_profiler par son reappliquer_sur_amont.sh.
+SAUVE_REQUIREMENTS=""
+if [ -d "$FORK_DIR/requirements-smartos" ]; then
+  SAUVE_REQUIREMENTS="$(mktemp -d)"
+  cp -r "$FORK_DIR/requirements-smartos/." "$SAUVE_REQUIREMENTS/"
+fi
 git checkout -B "$BRANCH" "refs/tags/v${VERSION}"
 git clean -fdx
 git reset --hard "refs/tags/v${VERSION}"
+if [ -n "$SAUVE_REQUIREMENTS" ]; then
+  mkdir -p "$FORK_DIR/requirements-smartos"
+  cp -r "$SAUVE_REQUIREMENTS/." "$FORK_DIR/requirements-smartos/"
+  rm -rf "$SAUVE_REQUIREMENTS"
+fi
 
 echo "Application des correctifs SmartOS (spyder_patch/)..."
 bash "$GEN_DIR/spyder_patch/appliquer_correctifs_spyder.sh" "$FORK_DIR" "$GEN_DIR"
@@ -121,13 +135,13 @@ cp "$GEN_DIR/spyder_patch/patch_spyder_kernels_profile_interrupt.py" \
 cp -r "$GEN_DIR/derives/config-reference" "$SUPPORT/config-reference"
 
 cp "$GEN_DIR/outils/substituer_home.sh" "$SUPPORT/substituer_home.sh"
-cp "$GEN_DIR/derives/qt_bindings_Spyder-${VERSION}.txt" "$SUPPORT/qt_bindings.txt"
+cp "$FORK_DIR/requirements-smartos/qt_bindings_Spyder-${VERSION}.txt" "$SUPPORT/qt_bindings.txt"
 
 # Version de Python exigee : celle du requirements gele le plus recent pour CETTE version.
-PY_REQUISE=$(find "$GEN_DIR/derives" -maxdepth 1 \
+PY_REQUISE=$(find "$FORK_DIR/requirements-smartos" -maxdepth 1 \
   -name "requirements_Spyder-${VERSION}_py*.txt" ! -name "*_full.txt" -printf '%f\n' \
   | sed -E 's/^.*_py([0-9]+\.[0-9]+)\.txt$/\1/' | head -1)
-[ -n "$PY_REQUISE" ] || { echo "ERREUR : requirements_Spyder-${VERSION}_py*.txt introuvable." >&2; exit 1; }
+[ -n "$PY_REQUISE" ] || { echo "ERREUR : requirements-smartos/requirements_Spyder-${VERSION}_py*.txt introuvable dans le fork." >&2; exit 1; }
 echo "$PY_REQUISE" > "$SUPPORT/python-version.txt"
 
 # Catalogue des greffons : un depot GitHub par greffon (installables a la carte). Derive de
@@ -141,7 +155,7 @@ done < "$GEN_DIR/fork_files/greffons-distribues.txt" \
 # Requirements agrege : la pile figee du requirements SmartOS, ou la ligne spyder (PyPI ou
 # fork git) devient "." - l'editeur s'installe depuis le clone lui-meme, deja patche.
 sed -E 's|^spyder==.*$|.|; s|^spyder @ .*$|.|' \
-  "$GEN_DIR/derives/requirements_Spyder-${VERSION}_py${PY_REQUISE}.txt" \
+  "$FORK_DIR/requirements-smartos/requirements_Spyder-${VERSION}_py${PY_REQUISE}.txt" \
   > "$FORK_DIR/smartos-requirements.txt"
 grep -q '^\.$' "$FORK_DIR/smartos-requirements.txt" || {
   echo "ERREUR : la ligne spyder n'a pas ete trouvee/remplacee dans le requirements." >&2

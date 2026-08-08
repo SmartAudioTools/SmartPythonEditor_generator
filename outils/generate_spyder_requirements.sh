@@ -34,7 +34,11 @@
 
 set -eu
 
-DEST_DIR="$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/derives"
+# Les requirements et la version geles appartiennent au PRODUIT : ils vivent dans le depot
+# SmartPythonEditor (requirements/), pas ici (decision utilisateur, 08/08/2026). Le fork est
+# suppose clone a cote de ce depot ; reconstruire.sh les PRESERVE a travers ses reconstructions.
+DEST_DIR="$(dirname "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")")/SmartPythonEditor/requirements-smartos"
+mkdir -p "$DEST_DIR"
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
