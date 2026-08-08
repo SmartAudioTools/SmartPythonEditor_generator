@@ -89,6 +89,23 @@ def main():
 
     source = source.replace(ANCIEN, NOUVEAU)
 
+    # 2e bloc (08/08/2026) : neutraliser le "make_visible" AMONT du meme on_mainwindow_visible
+    # (migration 6.0->6.1 : il force le dock visible une fois). Sur une configuration neuve il
+    # se declenche APRES notre patch_spyder_hide_docks et REAFFICHE le panneau que celui-ci
+    # vient de cacher - constate le 08/08/2026 sur l'installation complete fraiche. Le neutraliser
+    # ici (et non poser make_visible=True dans la config de reference) couvre aussi les
+    # configurations existantes qui n'ont pas la cle.
+    ANCIEN2 = 'if not self.get_conf("make_visible", default=False):'
+    NOUVEAU2 = ('if False:  # [SmartOS no-forced-switch] make_visible amont neutralise : il '
+                'reaffichait le dock apres notre masquage par defaut')
+    if NOUVEAU2.split("  #")[0] not in source:
+        n2 = source.count(ANCIEN2)
+        if n2 != 1:
+            print(f"AVERTISSEMENT : ancrage make_visible trouve {n2} fois - bloc 2 non applique.",
+                  file=sys.stderr)
+        else:
+            source = source.replace(ANCIEN2, NOUVEAU2)
+
     try:
         ast.parse(source)
     except SyntaxError as error:
