@@ -80,10 +80,29 @@ BLOCK_V2 = (
     "            self.set_conf(\"smartos_docks_hidden_v2\", True)\n"
 )
 
+
+BLOCK_V2_TAIL = "            self.set_conf(\"smartos_docks_hidden_v2\", True)\n"
+
+BLOCK_V3 = (
+    "\n"
+    "        # SmartOS (3e passe, 08/08/2026) : Analyse de code (pylint). La disposition par\n"
+    "        # defaut de Spyder l'affiche ; ici le bouton Docteur et la marge (greffon\n"
+    "        # spyder_code_analysis) couvrent l'usage courant, le panneau se rouvre de\n"
+    "        # lui-meme au premier clic sur Docteur. Drapeau DISTINCT, comme pour la v2 :\n"
+    "        # les configurations dont v1/v2 sont deja consommes doivent quand meme le\n"
+    "        # masquer une fois.\n"
+    "        if not self.get_conf(\"smartos_docks_hidden_v3\", False):\n"
+    "            _smartos_plugin = self.get_plugin(\"pylint\", error=False)\n"
+    "            if _smartos_plugin is not None:\n"
+    "                _smartos_plugin.get_widget().toggle_view(False)\n"
+    "            self.set_conf(\"smartos_docks_hidden_v3\", True)\n"
+)
+
 # (marqueur, ancien, nouveau), appliques DANS CET ORDRE.
 PAIRS = [
     ("smartos_docks_hidden_once", ANCHOR, ANCHOR + BLOCK_V1),
     ("smartos_docks_hidden_v2", BLOCK_V1_TAIL, BLOCK_V1_TAIL + BLOCK_V2),
+    ("smartos_docks_hidden_v3", BLOCK_V2_TAIL, BLOCK_V2_TAIL + BLOCK_V3),
 ]
 
 
@@ -128,7 +147,7 @@ def main():
     with open(path, "w", encoding="utf-8") as f:
         f.write(source)
     print(f"Patch masquage docks applique ({applied} bloc(s)) : Line Profiler, Debogueur, VizTracer, "
-          f"Profileur, Historique et Terminal caches au premier lancement ({path})")
+          f"Profileur, Historique, Terminal et Analyse de code caches au premier lancement ({path})")
     return 0
 
 
