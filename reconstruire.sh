@@ -115,9 +115,10 @@ chmod 755 "$FORK_DIR/install.sh"
 cp "$GEN_DIR/spyder_patch/patch_spyder_kernels_profile_interrupt.py" \
    "$SUPPORT/patchs-tiers/patch_spyder_kernels_profile_interrupt.py"
 
-# Configuration de reference, purgee des chemins SmartOS et enrichie des barres de greffons.
-python3 "$GEN_DIR/fork_files/preparer_config_reference.py" \
-  "$GEN_DIR/config_files/spyder_${VERSION}" "$SUPPORT/config-reference"
+# Configuration de reference : la version PURGEE committee dans derives/ (rafraichie depuis
+# une machine SmartOS par outils/preparer_config_reference.py, cf. README) - une
+# reconstruction n'a donc besoin de rien d'autre que ce depot.
+cp -r "$GEN_DIR/derives/config-reference" "$SUPPORT/config-reference"
 
 cp "$GEN_DIR/outils/substituer_home.sh" "$SUPPORT/substituer_home.sh"
 cp "$GEN_DIR/derives/qt_bindings_Spyder-${VERSION}.txt" "$SUPPORT/qt_bindings.txt"
