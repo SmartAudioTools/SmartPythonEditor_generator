@@ -73,6 +73,14 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
   # spyder_patch/patch_spyder_console_tab_no_bare_a.py.
   python3 "$GEN_DIR/spyder_patch/patch_spyder_console_tab_no_bare_a.py" \
     "$ROOT/spyder/plugins/ipythonconsole/widgets/client.py"
+  # Une console ANONYME (bouton "+") reutilise desormais le plus petit numero libere par
+  # une fermeture au lieu de compter pour toujours vers le haut, et l'emplacement 1 ne
+  # porte plus de numero du tout : "Console", "Console 2", "Console 3", ... Decision de
+  # l'utilisateur du 09/08/2026, suite immediate du retrait du "/A" ci-dessus. DOIT rester
+  # APRES patch_spyder_console_tab_no_bare_a.py (son ancre dans client.py est le texte deja
+  # patche par lui). Cf. spyder_patch/patch_spyder_console_tab_reuse_number.py.
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_console_tab_reuse_number.py" \
+    "$ROOT/spyder/plugins/ipythonconsole/widgets"
   # remplace l'icone du bouton "Profiler le fichier" par la notre. C'est l'icone nommee 'profiler'
   # du gestionnaire d'icones de Spyder (ima.icon('profiler') -> images/<theme>/profiler.svg), aussi
   # reutilisee comme marqueur par les marqueurs de profilage du fork spyder_line_profiler : la remplacer met les
