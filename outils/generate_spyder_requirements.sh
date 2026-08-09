@@ -148,7 +148,7 @@ from packaging.version import InvalidVersion, Version
 #     lui-meme n'a pas besoin d'etre epingle : simple dependance transitive de pylsp-mypy, deja
 #     resolue par pip a l'installation (meme principe que "black" pour python-lsp-server).
 #   (spyder-terminal a ete RETIRE le 26/07/2026 : le plugin "Terminal" maison
-#     Commun/spyder_plugins/spyder_native_terminal le remplace, avec le vrai moteur de Konsole
+#     Commun/spyder_plugins/spyder_konsole le remplace, avec le vrai moteur de Konsole
 #     via QTermWidget, sans navigateur embarque ni serveur local - et sans les quatre patchs Qt6
 #     qu'il fallait maintenir, ni les serveurs tornado qui survivaient a la fermeture de Spyder.)
 #   pyxel : moteur de jeu retro requis par le plugin Spyder "Pyxel" (cf.

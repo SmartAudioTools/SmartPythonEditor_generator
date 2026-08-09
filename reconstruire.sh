@@ -150,6 +150,9 @@ echo "$PY_REQUISE" > "$SUPPORT/python-version.txt"
 # Catalogue des greffons : un depot GitHub par greffon (installables a la carte). Derive de
 # la liste UNIQUE greffons-distribues.txt, partagee avec installation_Create_Repositories.sh
 # (clonage des depots sur machine neuve) - un greffon s'ajoute la-bas, une seule fois.
+# ⚠ L'ORDRE de la liste est un ordre d'INSTALLATION : install.sh la deroule telle quelle,
+# et en mode --local-plugins pip ne peut pas resoudre une dependance non publiee -
+# spyder_konsole doit donc preceder spyder_claude, qui en depend (09/08/2026).
 while read -r NOM; do
   [ -n "$NOM" ] && echo "$NOM https://github.com/SmartAudioTools/$NOM.git"
 done < "$GEN_DIR/fork_files/greffons-distribues.txt" \

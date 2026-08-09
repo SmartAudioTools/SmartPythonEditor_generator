@@ -1,5 +1,4 @@
-smartos_konsole
-spyder_native_terminal
+spyder_konsole
 spyder_claude
 spyder_collab
 spyder_viztracer
