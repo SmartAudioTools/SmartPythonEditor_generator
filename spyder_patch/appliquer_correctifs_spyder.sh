@@ -57,10 +57,12 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
   # "Console dediee" chez Spyder veut dire UNE CONSOLE PAR FICHIER (get_client_for_file
   # reutilise la console deja ouverte pour ce fichier), pas un noyau neuf a chaque clic -
   # residu de variables constate par l'utilisateur le 02/08/2026 en relancant plusieurs
-  # fois le meme fichier. Redemarre desormais le noyau de la console dediee AVANT chaque
-  # nouvelle execution (comme le bouton "Redemarrer le noyau", sans confirmation) : un
-  # seul onglet par fichier, mais toujours un noyau vierge. Cf.
-  # Commun/scripts_installation/spyder_patch/patch_spyder_fresh_kernel_per_run.py.
+  # fois le meme fichier. FERME desormais la console dediee precedente avant de relancer,
+  # la branche existante en recreant une neuve : un seul onglet par fichier, toujours un
+  # noyau vierge. (Redemarrer le noyau, premiere version, ne marchait pas : restart_kernel
+  # est @qdebounced(200 ms), le redemarrage arrivait APRES l'envoi du %runfile et tuait le
+  # script en cours - detail dans l'en-tete du patch.) Cf.
+  # spyder_patch/patch_spyder_fresh_kernel_per_run.py.
   python3 "$GEN_DIR/spyder_patch/patch_spyder_fresh_kernel_per_run.py" \
     "$ROOT/spyder/plugins/ipythonconsole/widgets/main_widget.py"
   # remplace l'icone du bouton "Profiler le fichier" par la notre. C'est l'icone nommee 'profiler'
@@ -235,6 +237,13 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
   # au lieu du defaut [Nouveau, Ouvrir, ...] (demande utilisateur). Reordonne la liste dans
   # Application.on_toolbar_available. Cf. Commun/scripts_installation/spyder_patch/patch_spyder_file_toolbar_order.py.
   python3 "$GEN_DIR/spyder_patch/patch_spyder_file_toolbar_order.py" \
+    "$ROOT/spyder/plugins/application/plugin.py"
+  # La fenetre d'appel aux dons ("Help keep Spyder strong"), que Spyder ouvre tout seul au 5e
+  # puis au 25e demarrage, ne s'ouvre plus - demande de l'utilisateur du 09/08/2026. Le coeur
+  # de la barre d'etat et l'entree de menu, eux, restent : on retire la sollicitation non
+  # demandee, pas la possibilite de donner. Cf.
+  # spyder_patch/patch_spyder_no_appeal_dialog.py.
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_no_appeal_dialog.py" \
     "$ROOT/spyder/plugins/application/plugin.py"
   # ORDRE DES BARRES de la rangee du haut, rendu explicite (demande utilisateur du
   # 26/07/2026) : les quatre lanceurs se suivent - Executer, Deboguer, Profiler, Python Tutor -
