@@ -65,6 +65,14 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
   # spyder_patch/patch_spyder_fresh_kernel_per_run.py.
   python3 "$GEN_DIR/spyder_patch/patch_spyder_fresh_kernel_per_run.py" \
     "$ROOT/spyder/plugins/ipythonconsole/widgets/main_widget.py"
+  # Avec un noyau neuf a chaque execution, une console de fichier est presque toujours SEULE
+  # sur son noyau : le suffixe "/A" que Spyder accole systematiquement (lettre de la premiere
+  # console d'un noyau, cf. ClientWidget.get_name()) devient du bruit. Retire, en ne gardant
+  # le suffixe QUE pour une eventuelle console secondaire ("/B", ...) qui partagerait ce meme
+  # noyau. Decision de l'utilisateur du 09/08/2026. Cf.
+  # spyder_patch/patch_spyder_console_tab_no_bare_a.py.
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_console_tab_no_bare_a.py" \
+    "$ROOT/spyder/plugins/ipythonconsole/widgets/client.py"
   # remplace l'icone du bouton "Profiler le fichier" par la notre. C'est l'icone nommee 'profiler'
   # du gestionnaire d'icones de Spyder (ima.icon('profiler') -> images/<theme>/profiler.svg), aussi
   # reutilisee comme marqueur par les marqueurs de profilage du fork spyder_line_profiler : la remplacer met les
