@@ -51,8 +51,9 @@ ajoute deux methodes :
    CENTRAGE : QMainWindow attribue TOUT l'espace libre a la seule barre extensible la plus a droite
    (la DragArea de window_controls), jamais un partage entre deux barres. La largeur de la DragArea
    gauche est donc CALCULEE (_recenter : W/2 - epingle_gauche - groupe/2, epingle_gauche = burger +
-   Fichiers) pour que le groupe soit centre ; celle de droite remplit le reste. Recalcule sur
-   main.sig_resized et a chaque bascule du burger (dont la largeur change l'epinglage).
+   Fichiers) pour que le groupe soit centre ; celle de droite remplit le reste. Recalcule a chaque
+   evenement de TAILLE d'une barre de la rangee ou de la fenetre (filtre d'evenements, voir plus
+   bas), et a chaque bascule du burger (dont la largeur change l'epinglage).
    PLACEMENT (_place_left) DIFFERE via QTimer.singleShot (comme spyder_window_controls) : reordonne
    burger / Fichiers / DragArea gauche devant la barre du groupe la plus a gauche, reperee par sa
    GEOMETRIE x (l'ordre de toolbar_plugin.toolbarslist est l'ordre d'AJOUT, pas l'ordre visuel).
@@ -232,7 +233,7 @@ NEW_METHODS = '''    def _build_burger_menu(self):
 
         # PUBLIE sur main : la bascule deux ecrans (patch_spyder_deux_ecrans.py) passe par
         # restoreState() SANS redimensionner la fenetre principale (le second ecran a sa propre
-        # fenetre), donc ni sig_resized ni la bascule du burger ne rejouent le recentrage - la
+        # fenetre), donc rien ne garantit qu'un evenement de taille rejoue le recentrage - la
         # DragArea gauche garde la largeur figee calculee dans l'autre mode (releve utilisateur
         # du 08/08/2026 : « les boutons du milieu ne retournent pas au milieu »).
         main._smartos_recentrer_barres = _recenter
@@ -277,16 +278,68 @@ NEW_METHODS = '''    def _build_burger_menu(self):
                     main.insertToolBar(suivante, burger_toolbar)
             _recenter()
 
-        # Deux passes de placement (l'ancre par geometrie n'est fiable qu'une fois la rangee
-        # disposee), un recentrage tardif quand les combos ont leur taille finale, puis a chaque
-        # redimensionnement de la fenetre.
+        # Deux passes de placement : l'ancre par geometrie n'est fiable qu'une fois la rangee
+        # disposee.
         QTimer.singleShot(0, _place_left)
         QTimer.singleShot(400, _place_left)
-        QTimer.singleShot(700, _recenter)
-        try:
-            main.sig_resized.connect(lambda *a: _recenter())
-        except Exception:
-            pass
+
+        # RECENTRAGE PILOTE PAR L'ETAT REEL, PLUS PAR UNE MINUTERIE. Le recentrage se contentait
+        # d'une troisieme passe a 700 ms "quand les combos ont leur taille finale", puis ne
+        # rejouait plus que sur redimensionnement de la fenetre. Or ce delai est un pari sur la
+        # charge de la machine : une barre peut prendre sa largeur DEFINITIVE apres, le combo
+        # d'interpreteurs en tete (sa liste est reecrite a CHAQUE lancement par
+        # SmartPythonEditor.sh, donc sa largeur n'est pas connue au demarrage), et une barre de
+        # greffon peut se declarer plus tard encore. Le groupe restait alors decale jusqu'au
+        # demarrage suivant : un defaut INTERMITTENT, qui disparait au simple relancement et
+        # resiste donc a tout diagnostic par la configuration. Releve utilisateur du 31/08/2026
+        # apres reinstallation ("les boutons ne sont pas la ou on les avait places"), alors que la
+        # configuration enregistree etait exacte, ordre ET centrage compris - mesure faite sur une
+        # copie de sa configuration vivante, rejouee hors ecran.
+        # On surveille donc les evenements de TAILLE des barres de la rangee, et l'ARRIVEE d'une
+        # barre nouvelle, au lieu d'attendre un delai.
+        _minuterie = QTimer(main)
+        _minuterie.setSingleShot(True)
+        _minuterie.setInterval(0)
+        _minuterie.timeout.connect(_recenter)
+
+        def _recentrer_bientot():
+            # start() sur une minuterie deja armee la REDEMARRE : une rafale d'evenements (un
+            # relayout en produit plusieurs d'affilee) se resout donc en UN seul recalcul, en fin
+            # de boucle d'evenements.
+            _minuterie.start()
+
+        class _SurveillanceRangee(QObject):
+            def eventFilter(self, obj, event):
+                type_evenement = event.type()
+                if type_evenement == QEvent.Resize:
+                    # Resize couvre aussi celui de la fenetre principale, surveillee ci-dessous :
+                    # c'est ce qui remplace la connexion a main.sig_resized.
+                    _recentrer_bientot()
+                elif type_evenement == QEvent.ChildAdded:
+                    _surveiller_barres()
+                return False
+
+        _surveillance = _SurveillanceRangee(main)
+
+        def _surveiller_barres():
+            # dragbar est EXCLUE : c'est la barre que _recenter redimensionne lui-meme, la
+            # surveiller la ferait se rappeler indefiniment. Les autres convergent en une passe,
+            # leur largeur ne dependant pas de la sienne.
+            # Pas de liste des barres deja vues : Qt ignore la reinstallation d'un filtre deja
+            # pose (il le remonte en tete de liste), il n'y a donc rien a dedupliquer.
+            barres = [burger_toolbar]
+            if toolbar_plugin is not None:
+                barres += list(toolbar_plugin.toolbarslist)
+            for tb in barres:
+                if tb is not dragbar:
+                    tb.installEventFilter(_surveillance)
+            _recentrer_bientot()
+
+        # ChildAdded sur la fenetre principale : une barre ajoutee APRES ce code (greffon installe
+        # plus tard, barre recochee dans Affichage > Barres d'outils) entre ainsi d'elle-meme sous
+        # surveillance, sans qu'aucun appelant ait a le savoir.
+        main.installEventFilter(_surveillance)
+        _surveiller_barres()
 
         burger_toolbar.setVisible(False)  # cache par defaut ; Ctrl+M l'affiche
 
@@ -305,7 +358,7 @@ NEW_SPYDER_IMPORTS = (
     "from spyder.utils.icon_manager import ima\n"
 )
 NEW_QTPY_IMPORT = (
-    "from qtpy.QtCore import Qt, QPoint, QSize, QTimer\n"
+    "from qtpy.QtCore import Qt, QEvent, QObject, QPoint, QSize, QTimer\n"
     "from qtpy.QtGui import QKeySequence\n"
     "from qtpy.QtWidgets import QSizePolicy, QToolBar, QToolButton, QWidget\n"
 )
