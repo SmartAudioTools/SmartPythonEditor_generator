@@ -183,7 +183,11 @@ echo "Reconstruction LOCALE terminee : branche $BRANCH, tag $TAG, dans $FORK_DIR
 
 if [ "$PUSH" = true ]; then
   echo "Publication vers $FORK_URL..."
-  git push origin "$BRANCH"
+  # --force-with-lease, pas un push ordinaire : par CONSTRUCTION chaque reconstruction repart
+  # de l'etiquette officielle (reset --hard) et refait UN commit, donc la branche ne descend
+  # jamais de la version publiee - un push en avance rapide ne peut reussir qu'UNE fois, la
+  # premiere. "with-lease" refuse quand meme si quelqu'un a pousse depuis notre dernier fetch.
+  git push origin "$BRANCH" --force-with-lease
   git push origin "refs/tags/$TAG" --force
   echo "Publie."
 else
