@@ -54,10 +54,13 @@ ajoute deux methodes :
    Fichiers) pour que le groupe soit centre ; celle de droite remplit le reste. Recalcule a chaque
    evenement de TAILLE d'une barre de la rangee ou de la fenetre (filtre d'evenements, voir plus
    bas), et a chaque bascule du burger (dont la largeur change l'epinglage).
-   PLACEMENT (_place_left) DIFFERE via QTimer.singleShot (comme spyder_window_controls) : reordonne
-   burger / Fichiers / DragArea gauche devant la barre du groupe la plus a gauche, reperee par sa
-   GEOMETRIE x (l'ordre de toolbar_plugin.toolbarslist est l'ordre d'AJOUT, pas l'ordre visuel).
-   Deux passes (l'ancre par x n'est fiable qu'une fois la rangee reellement disposee).
+   PLACEMENT (_place_left) PILOTE PAR L'ETAT : reordonne burger / Fichiers / DragArea gauche devant
+   la barre du groupe la plus a gauche, reperee par sa GEOMETRIE (l'ordre de
+   toolbar_plugin.toolbarslist est l'ordre d'AJOUT, pas l'ordre visuel). L'ancre n'est fiable
+   qu'une fois la rangee reellement disposee : le placement n'a lieu que sur une geometrie VALIDE
+   et se retente a chaque evenement de disposition, jamais sur un delai (09/09/2026 ; le detail et
+   le releve qui l'ont impose sont en commentaire dans le code). Une sonde journalise chaque
+   tentative dans <config Spyder>/smartos_rangee.jsonl.
    burger et dragbar sont des QToolBar NUES (main.addToolBar), pas des barres gerees : on n'utilise
    PAS create_application_toolbar() dont le render() differe pourrait, selon l'ordre des
    on_mainwindow_visible, reconstruire la barre et evincer le widget. Elles sont donc absentes de
@@ -210,6 +213,76 @@ NEW_METHODS = '''    def _build_burger_menu(self):
             return ('file_toolbar',) + tuple(
                 getattr(main, '_smartos_barres_epinglees_gauche', ()))
 
+        # SONDE DE DEMARRAGE (09/09/2026) : journal JSON Lines de tout ce qui place, recentre,
+        # enregistre ou restaure la rangee, dans <config Spyder>/smartos_rangee.jsonl, tronque a
+        # chaque lancement. Releve utilisateur du 09/09/2026 : Docteur, Executer et Deboguer tout
+        # a GAUCHE de Fichiers - apparu au branchement d'un videoprojecteur, persistant a travers
+        # plusieurs relancements sans lui, puis disparu a un relancement de plus. Introuvable par
+        # rejeu hors ecran de sa configuration (rangee parfaite, meme sous charge) - jusqu'a ce
+        # journal, qui a montre le mecanisme sur ce meme rejeu (cf. le placement, plus bas). Il
+        # reste en place : il dit, a chaque tentative de placement, l'ancre choisie et si la
+        # geometrie etait valide, l'etat d'exposition de la fenetre, les ecrans presents, et la
+        # rangee telle que saveState() l'enregistre a la fermeture.
+        # Jamais d'exception ni d'ecriture sur stderr : une sonde qui casse Spyder ne mesure rien.
+        _journal = get_conf_path('smartos_rangee.jsonl')
+        _t0 = time.monotonic()
+        _lignes = [0]
+        try:
+            open(_journal, 'w').close()
+        except OSError:
+            _journal = None
+
+        def _journaliser(evenement, **champs):
+            # Plafond : _recenter rejoue a chaque rafale de redimensionnement, une session
+            # longue en produirait des milliers ; les premieres secondes sont ce qui compte.
+            if _journal is None or _lignes[0] >= 300:
+                return
+            try:
+                barres = [burger_toolbar, dragbar]
+                if toolbar_plugin is not None:
+                    barres += list(toolbar_plugin.toolbarslist)
+                fenetre = main.windowHandle()
+                ligne = dict(
+                    t_ms=int((time.monotonic() - _t0) * 1000),
+                    evt=evenement,
+                    w=main.width(),
+                    expose=bool(fenetre is not None and fenetre.isExposed()),
+                    ecrans=[e.name() for e in QGuiApplication.screens()],
+                    barres=[dict(id=tb.objectName(),
+                                 x=tb.mapTo(main, QPoint(0, 0)).x(),
+                                 w=tb.width(),
+                                 v=tb.isVisible(),
+                                 haut=main.toolBarArea(tb) == Qt.TopToolBarArea)
+                            for tb in barres],
+                )
+                ligne.update(champs)
+                with open(_journal, 'a', encoding='utf-8') as f:
+                    f.write(json.dumps(ligne, ensure_ascii=False) + '\\n')
+                _lignes[0] += 1
+            except Exception:
+                pass
+
+        def _sonder(nom):
+            # saveState/restoreState sont les seuls a pouvoir reordonner la rangee sans geste
+            # de l'utilisateur (fermeture, bascule deux ecrans) : on les journalise.
+            original = getattr(main, nom)
+
+            def sonde(*args, **kwargs):
+                resultat = original(*args, **kwargs)
+                _journaliser(nom)
+                return resultat
+            setattr(main, nom, sonde)
+
+        _sonder('saveState')
+        _sonder('restoreState')
+        try:
+            _mode = main.get_plugin(Plugins.Layout, error=False).get_conf(
+                'smartos_mode_deux_ecrans', default=False)
+        except Exception:
+            _mode = None
+        _journaliser('demarrage', date=time.strftime('%Y-%m-%d %H:%M:%S'),
+                     mode_deux_ecrans=_mode)
+
         def _recenter():
             if toolbar_plugin is None:
                 return
@@ -228,8 +301,9 @@ NEW_METHODS = '''    def _build_burger_menu(self):
                     group_w += tb.width()
             if burger_toolbar.isVisible():
                 pinned += burger_toolbar.width()
-            drag.setFixedWidth(
-                max(0, main.width() // 2 - pinned - group_w // 2))
+            largeur = max(0, main.width() // 2 - pinned - group_w // 2)
+            drag.setFixedWidth(largeur)
+            _journaliser('recenter', drag_w=largeur)
 
         # PUBLIE sur main : la bascule deux ecrans (patch_spyder_deux_ecrans.py) passe par
         # restoreState() SANS redimensionner la fenetre principale (le second ecran a sa propre
@@ -238,13 +312,25 @@ NEW_METHODS = '''    def _build_burger_menu(self):
         # du 08/08/2026 : « les boutons du milieu ne retournent pas au milieu »).
         main._smartos_recentrer_barres = _recenter
 
-        # Placement DIFFERE en fin de boucle d'evenements (QTimer.singleShot), apres que le plugin
-        # Toolbar a dispose ses barres - meme technique que spyder_window_controls. Ordre vise :
-        # burger, Fichiers, DragArea gauche, puis le groupe. L'ancre est la barre du groupe la plus
-        # a GAUCHE reperee par sa GEOMETRIE (x) : l'ordre de toolbarslist ne suit pas l'ordre visuel.
+        # PLACEMENT PILOTE PAR L'ETAT, PLUS PAR UNE MINUTERIE (09/09/2026). Ordre vise : burger,
+        # Fichiers, epinglees, DragArea gauche, puis le groupe. L'ancre est la barre du groupe la
+        # plus a GAUCHE, reperee par sa GEOMETRIE : l'ordre de toolbarslist ne suit pas l'ordre
+        # visuel. Or cette geometrie n'est fiable qu'une fois la rangee disposee ; avant, toutes
+        # les barres ont la meme position, min() rend la premiere de toolbarslist (profile), et
+        # la chaine d'insertions donne : Docteur Executer Deboguer [burger Fichiers Ecrans
+        # DragArea] Profiler... Le journal de la sonde l'a montre sur un demarrage SAIN, rejoue
+        # hors ecran : la passe a 0 ms produisait cet ordre A CHAQUE lancement, et c'etait une
+        # seconde passe a 400 ms qui le reparait. Quand elle tombait elle aussi trop tot
+        # (demarrage lent, ecran qui change au branchement d'un videoprojecteur), la rangee
+        # restait cassee et saveState() perpetuait cet ordre a la fermeture - releve utilisateur
+        # du 09/09/2026, persistant a travers plusieurs relancements. On ne place donc que sur une
+        # geometrie VALIDE (positions toutes distinctes), et l'on reessaie a chaque evenement de
+        # disposition (la meme surveillance que le recentrage, ci-dessous), jamais sur un delai.
+        # Le placement est rejoue si une barre epinglee se declare apres coup.
+        _place_faite = [None]
+
         def _place_left():
             if toolbar_plugin is None:
-                _recenter()
                 return
             file_tb = None
             try:
@@ -258,30 +344,35 @@ NEW_METHODS = '''    def _build_burger_menu(self):
                      and main.toolBarArea(tb) == Qt.TopToolBarArea
                      and tb.objectName() != 'window_controls_toolbar'
                      and tb.objectName() not in epingles]
-            if cands:
-                anchor = min(
-                    cands, key=lambda tb: tb.mapTo(main, QPoint(0, 0)).x())
-                main.insertToolBar(anchor, dragbar)
-                # Les epinglees additionnelles viennent JUSTE AVANT la DragArea gauche, donc
-                # collees a Fichiers ; puis Fichiers devant elles, puis le burger tout a gauche.
-                suivante = dragbar
-                for nom in reversed(epingles[1:]):
-                    tb = next((t for t in toolbar_plugin.toolbarslist
-                               if t.objectName() == nom), None)
-                    if tb is not None:
-                        main.insertToolBar(suivante, tb)
-                        suivante = tb
-                if file_tb is not None:
-                    main.insertToolBar(suivante, file_tb)
-                    main.insertToolBar(file_tb, burger_toolbar)
-                else:
-                    main.insertToolBar(suivante, burger_toolbar)
-            _recenter()
+            positions = [tb.mapTo(main, QPoint(0, 0)) for tb in cands]
+            cles = [(p.y(), p.x()) for p in positions]
+            anchor = cands[cles.index(min(cles))] if cands else None
+            valide = anchor is not None and len(set(cles)) == len(cles)
+            _journaliser('place_left', geometrie_valide=valide,
+                         ancre=anchor.objectName() if anchor is not None else None)
+            if not valide:
+                return
+            main.insertToolBar(anchor, dragbar)
+            # Les epinglees additionnelles viennent JUSTE AVANT la DragArea gauche, donc
+            # collees a Fichiers ; puis Fichiers devant elles, puis le burger tout a gauche.
+            suivante = dragbar
+            for nom in reversed(epingles[1:]):
+                tb = next((t for t in toolbar_plugin.toolbarslist
+                           if t.objectName() == nom), None)
+                if tb is not None:
+                    main.insertToolBar(suivante, tb)
+                    suivante = tb
+            if file_tb is not None:
+                main.insertToolBar(suivante, file_tb)
+                main.insertToolBar(file_tb, burger_toolbar)
+            else:
+                main.insertToolBar(suivante, burger_toolbar)
+            _place_faite[0] = epingles
 
-        # Deux passes de placement : l'ancre par geometrie n'est fiable qu'une fois la rangee
-        # disposee.
-        QTimer.singleShot(0, _place_left)
-        QTimer.singleShot(400, _place_left)
+        def _disposer():
+            if _place_faite[0] != _epingles_a_gauche():
+                _place_left()
+            _recenter()
 
         # RECENTRAGE PILOTE PAR L'ETAT REEL, PLUS PAR UNE MINUTERIE. Le recentrage se contentait
         # d'une troisieme passe a 700 ms "quand les combos ont leur taille finale", puis ne
@@ -300,7 +391,7 @@ NEW_METHODS = '''    def _build_burger_menu(self):
         _minuterie = QTimer(main)
         _minuterie.setSingleShot(True)
         _minuterie.setInterval(0)
-        _minuterie.timeout.connect(_recenter)
+        _minuterie.timeout.connect(_disposer)
 
         def _recentrer_bientot():
             # start() sur une minuterie deja armee la REDEMARRE : une rafale d'evenements (un
@@ -354,12 +445,15 @@ NEW_METHODS = '''    def _build_burger_menu(self):
 '''
 
 NEW_SPYDER_IMPORTS = (
+    "from spyder.config.base import get_conf_path\n"
     "from spyder.plugins.toolbar.api import ApplicationToolbars\n"
     "from spyder.utils.icon_manager import ima\n"
 )
 NEW_QTPY_IMPORT = (
+    "import json\n"
+    "import time\n"
     "from qtpy.QtCore import Qt, QEvent, QObject, QPoint, QSize, QTimer\n"
-    "from qtpy.QtGui import QKeySequence\n"
+    "from qtpy.QtGui import QGuiApplication, QKeySequence\n"
     "from qtpy.QtWidgets import QSizePolicy, QToolBar, QToolButton, QWidget\n"
 )
 
