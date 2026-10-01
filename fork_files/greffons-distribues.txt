@@ -10,3 +10,4 @@ spyder_pyxel
 spyder_python_tutor
 spyder_line_profiler
 spyder_tortoisehg
+spyder_smartteacher
