@@ -117,6 +117,16 @@ git checkout -B "$BRANCH" "refs/tags/v${VERSION}"
 # l'inode de la source.
 git clean -fdx -e .claude
 git reset --hard "refs/tags/v${VERSION}"
+# ... et son COROLLAIRE, oublie le 04/10/2026 quand "-e .claude" a ete ajoute : si .claude/ survit
+# au clean, le "git add -A" de la fin le COMMITTE et "--push" le publie sur un depot GitHub PUBLIC
+# (69 transcripts de conversation). Le clean le supprimait avant, donc le bug protegeait par
+# accident : le corriger a ouvert la fuite. info/exclude et pas .gitignore, qui vient de
+# l'etiquette amont et que le "reset --hard" ci-dessus remet a neuf ; et pas un pathspec sur le
+# seul "git add", parce qu'ici toute commande git du depot en herite, meme tapee a la main.
+# Effet de bord VOULU : .claude/ sort aussi de "git status --porcelain", donc le garde-fou "aucun
+# correctif n'a modifie l'arbre" (plus bas) redevient vrai au lieu d'etre toujours satisfait.
+grep -qxF '.claude/' "$FORK_DIR/.git/info/exclude" 2>/dev/null \
+  || echo '.claude/' >> "$FORK_DIR/.git/info/exclude"
 if [ -n "$SAUVE_REQUIREMENTS" ]; then
   mkdir -p "$FORK_DIR/requirements-smartos"
   cp -r "$SAUVE_REQUIREMENTS/." "$FORK_DIR/requirements-smartos/"
