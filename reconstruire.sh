@@ -20,6 +20,8 @@
 #   4. Repart d'un arbre entierement PROPRE a cette etiquette (git clean -fdx + reset --hard) :
 #      aucune trace d'une reconstruction precedente ne doit survivre - c'est ce qui garantit que
 #      "reconstruire" veut bien dire repartir de zero, jamais fusionner avec l'etat d'avant.
+#      Une SEULE exception, et elle est vitale : .claude/ (transcripts de session, cf. le
+#      commentaire du "git clean" lui-meme).
 #   5. Rejoue spyder_patch/appliquer_correctifs_spyder.sh sur cet
 #      arbre. Un correctif qui echoue (cible AST introuvable) arrete tout ICI : rien n'est
 #      committe ni publie sur un etat partiellement patche.
@@ -102,7 +104,18 @@ fi
 # sauvegardees ci-dessus : on peut remettre l'arbre a plat, sinon checkout refuse.
 git reset --hard -q HEAD 2>/dev/null || true
 git checkout -B "$BRANCH" "refs/tags/v${VERSION}"
-git clean -fdx
+# -e .claude OBLIGATOIRE : .claude/conversations est la SOURCE du bind-mount des transcripts de
+# session (Commun/scripts/claude_compte_isole.sh), et .claude/ n'est pas suivi par git - "clean
+# -fdx" le supprimait donc en entier, detruisant les conversations de toutes les sessions
+# ouvertes sur ce fork, sans le moindre message.
+# Cout, 01/10/2026 : 90 transcripts perdus a la reconstruction de 12:04:44 (reflog), recuperes
+# le 04/10 dans la sauvegarde externe seulement. Detail : CachyOS/Documentation/DONE/
+# "DONE - Claude Code - hooks, voix, securite.txt".
+# Deux fausses pistes, mesurees le 04/10/2026 : mettre .claude/ au .gitignore ne protege de RIEN
+# (c'est le rôle de -x que de supprimer aussi les ignores) ; et le sauve/restaure employe
+# ci-dessus pour requirements-smartos casserait le montage des sessions en cours, qui tient a
+# l'inode de la source.
+git clean -fdx -e .claude
 git reset --hard "refs/tags/v${VERSION}"
 if [ -n "$SAUVE_REQUIREMENTS" ]; then
   mkdir -p "$FORK_DIR/requirements-smartos"
