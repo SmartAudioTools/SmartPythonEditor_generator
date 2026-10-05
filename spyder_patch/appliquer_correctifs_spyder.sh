@@ -108,7 +108,10 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
   # Commun/scripts_installation/spyder_patch/patch_spyder_edgeline_dotted.py.
   python3 "$GEN_DIR/spyder_patch/patch_spyder_edgeline_dotted.py" "$ROOT/spyder/plugins/editor/panels/edgeline.py"
   # permet d'éviter l'ouverture de multiples instances de spyder
-  sed -i "s/import time/import time\nimport setproctitle\n\nsetproctitle.setproctitle('spyder')/g" "$ROOT/spyder/app/start.py"
+  # Garde + ancrage sur la ligne entiere (05/10/2026) : rejoue, le sed doublait ses lignes, et
+  # coupait en deux tout bloc ajoute contenant « import time ».
+  grep -q "^import setproctitle$" "$ROOT/spyder/app/start.py" || \
+    sed -i "s/^import time$/import time\nimport setproctitle\n\nsetproctitle.setproctitle('spyder')/" "$ROOT/spyder/app/start.py"
   # ajoute un vrai menu de selection d'interpreteur directement dans le widget de barre d'etat
   # (TODO du 18/07/2026, demande explicite de l'utilisateur - le menu par defaut de Spyder n'est
   # qu'un raccourci vers les Preferences, pas un vrai selecteur). Cf.
@@ -165,6 +168,13 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
   # de test sans Spyder : Commun/scripts/test_smartos_spyder_actions.py.
   cp -f "$GEN_DIR/ressources/smartos_spyder_actions.py" "$ROOT/smartos_spyder_actions.py"
   python3 "$GEN_DIR/spyder_patch/patch_spyder_actions.py" "$ROOT/spyder/app/cli_options.py" "$ROOT/spyder/app/mainwindow.py"
+  # chronometre de demarrage (05/10/2026) : SMARTOS_STARTUP_TRACE=<chemin.json> fait ecrire
+  # a Spyder l'horodatage de son lancement (imports, chaque greffon, fenetre visible, editeur
+  # utilisable, LSP, noyau). Meme montage que --actions : le module vit A COTE de Spyder, le
+  # patch se reduit a l'importer, et seulement si la variable est definie. C'est l'outil de
+  # mesure de tous les correctifs de demarrage : sans lui, un gain se juge au bruit.
+  cp -f "$GEN_DIR/ressources/smartos_startup_trace.py" "$ROOT/smartos_startup_trace.py"
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_startup_trace.py" "$ROOT/spyder/app/start.py"
   # permet d'outrepasser la plage de version Qt figee en dur dans spyder/requirements.py via
   # les variables d'environnement SPYDER_QT_MIN_VERSION / SPYDER_QT_MAX_VERSION /
   # SPYDER_QT_SKIP_VERSION_CHECK, sans avoir a repatcher ce fichier a chaque nouvelle version
@@ -177,6 +187,26 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
   # a reconstruire chaque fois la meme feuille. Gain mesure : 4381 ms -> 4087 ms. Cf.
   # Commun/scripts_installation/spyder_patch/patch_spyder_menu_stylesheet_cache.py pour le detail complet.
   python3 "$GEN_DIR/spyder_patch/patch_spyder_menu_stylesheet_cache.py" "$ROOT/spyder/api/widgets/menus.py"
+
+  # qstylizer : chaque regle de style recalculait dans son __init__ la liste de ses attributs,
+  # qui ne depend que de sa classe. Memorisee par classe (05/10/2026) : construction des
+  # feuilles 230 -> 80 ms, fenetre visible -325 ms sur 4064 (A/B entrelace x6, plages
+  # disjointes), feuilles produites identiques. Complete le cache des menus ci-dessus.
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_qstylizer_memo.py" "$ROOT/spyder/utils/stylesheet.py"
+  # feuille de style de l'application gardee sur disque (05/10/2026) : sa construction (analyse
+  # de la feuille de QDarkStyle par qstylizer, en python pur) passe de 78 a 11 ms ; la cle du
+  # cache reprend theme, palette, police, plateforme et date des deux fichiers de code.
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_feuille_app_cache.py" "$ROOT/spyder/utils/stylesheet.py"
+  # trois recalculs repetes au demarrage (05/10/2026) : icones SVG rendues une fois par nom
+  # (129 appels pour 44 icones), feuille « liste fermee » posee des la construction des listes
+  # deroulantes, une seule conversion en texte par feuille de panneau. Avec le cache ci-dessus :
+  # editeur utilisable 2941 -> 2598 ms (A/B entrelace x7).
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_styles_icones_demarrage.py" "$ROOT"
+  # configuration : chaque lecture d'option reanalysait sa valeur (2334 ast.literal_eval au
+  # demarrage, dont un dictionnaire de 9 Ko relu 325 fois) et chaque ecriture reecrivait le
+  # .ini entier (447 fois). Analyses memorisees par chaine, ecritures regroupees sur 300 ms
+  # (05/10/2026) : editeur utilisable 4068 -> 3746 ms (A/B entrelace x8).
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_config_rapide.py" "$ROOT/spyder/config/user.py"
   # differe le chargement de trois bibliotheques lourdes (chardet, sphinx, keyring),
   # importees a la volee au demarrage pour un usage ponctuel (deviner un encodage, rendre
   # le panneau Aide, stocker un mot de passe securise) : le profilage (-X importtime)
@@ -187,6 +217,38 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
     "$ROOT/spyder/utils/encoding.py" \
     "$ROOT/spyder/plugins/help/utils/sphinxify.py" \
     "$ROOT/spyder/config/manager.py"
+  # complement generique du precedent (05/10/2026) : une quinzaine d'imports de tete qui ne
+  # servent pas au demarrage (nbconvert, requests, github, jsonschema, markdown_it, pylint,
+  # pylsp._utils) sont deplaces dans les fonctions qui s'en servent, et chardet n'est plus
+  # appele pour un fichier purement ASCII. Mesure d'import : ~1550 -> ~1150 ms, 2742 -> 1906
+  # modules. DOIT passer APRES patch_spyder_lazy_imports.py (meme fichier encoding.py).
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_lazy_imports_demarrage.py" "$ROOT"
+  # les 13 expressions regulieres de coloration (une par langage) etaient compilees a l'import
+  # du module, 30 ms, alors qu'une session n'en utilise qu'une ou deux : elles le sont au
+  # premier usage (05/10/2026). Import du module 39 -> 9 ms, mesure isolee.
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_regex_coloration_paresseuses.py" \
+    "$ROOT/spyder/utils/syntaxhighlighters.py"
+  # PySide6 relit le SOURCE de chaque module importe apres lui (inspect.getsource, 1393 fichiers
+  # au demarrage) pour savoir s'il utilise PySide : meme question, lecture brute du fichier
+  # (05/10/2026). Editeur utilisable 2340 -> 2240 ms (A/B entrelace x7), dictionnaire identique.
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_pyside_feature_rapide.py" "$ROOT/spyder/app/mainwindow.py"
+  # l'interface n'utilise que quelques sous-modules d'IPython, mais en importer un execute
+  # IPython/__init__.py, qui charge tout le terminal interactif (prompt_toolkit, jedi, ultratb) :
+  # l'initialisation du paquet est repoussee a son premier usage reel (05/10/2026). Fenetre
+  # visible 1624 -> 1424 ms, editeur utilisable 2054 -> 1896 ms (A/B entrelace x7). Garde de version
+  # dans le correctif : a completer a chaque montee d'IPython.
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_ipython_paresseux.py" "$ROOT/spyder/app/mainwindow.py"
+  # Ramasse-miettes cyclique suspendu pendant le demarrage (gc.disable() en tete de start.py),
+  # retabli 3 s apres sig_setup_finished : ~500 collectes inutiles en moins. A/B 7 runs :
+  # fenetre visible 1565 -> 1482 ms, editeur utilisable 2046 -> 1920 ms.
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_gc_demarrage.py" "$ROOT/spyder/app/start.py" "$ROOT/spyder/app/mainwindow.py"
+  # asttokens (charge par IPython via stack_data) importe SANS astroid dans l'interface : 94
+  # modules de moins, ~15 ms (releve d'imports in situ ; sous la resolution du banc A/B).
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_asttokens_sans_astroid.py" "$ROOT/spyder/app/mainwindow.py"
+  # Points d'entree des paquets lus UNE fois pendant le demarrage au lieu de cinq
+  # (importlib.metadata.entry_points : 37 -> 8 ms mesures in situ, 05/10/2026).
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_points_entree_memo.py" "$ROOT/spyder/app/start.py"
+
   # --- Deux defauts AMONT de PySide6 >= 6.9 face au modele objet de Spyder 6.1.5 (26/07/2026).
   #     Sans eux, Spyder ne demarre PAS du tout sous PySide6 6.11 : « Target signal has been
   #     deleted » a l'enregistrement du premier greffon, puis un segfault dans show(). Les deux
@@ -516,6 +578,12 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
   # Le canevas du splash est en proportions fixes cote code : aligne sur le nouveau visuel.
   python3 "$GEN_DIR/spyder_patch/patch_spyder_splash_size.py" \
     "$ROOT/spyder/app/utils.py"
+  # Ecran de demarrage MASQUE « pour l'instant » (demande de l'utilisateur, 05/10/2026) : sur
+  # le banc hors ecran, le premier QSplashScreen.show() bloque 1,0 s fixe (fenetre visible
+  # 4023 -> 3008 ms). Sous Wayland reel, NON MESURE : a juger a la trace de demarrage, et
+  # retirer cette ligne si l'ecran ne coute rien la-bas. Le visuel ci-dessus reste pose (il
+  # sert encore au redemarrage, restart.py).
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_splash_off.py" "$ROOT"
   # --- Dependances pip du fork : PySide6 par defaut (08/08/2026, demande utilisateur) ----
   # Seulement sur l'ARBRE du fork (setup.py) - un site-packages n'en a pas, et ses
   # dependances sont deja resolues. La plage vient de qt_bindings_Spyder-<v>.txt du fork

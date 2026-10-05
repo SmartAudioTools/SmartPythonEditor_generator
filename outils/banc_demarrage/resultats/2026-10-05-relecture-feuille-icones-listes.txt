@@ -1,0 +1,51 @@
+RELECTURE CRITIQUE - patch_spyder_feuille_app_cache.py + patch_spyder_styles_icones_demarrage.py
+(worker ec, 05/10/2026 ~03:00). Arbres lus : scratchpad 03 bed/h (avant) et bed/j (apres).
+Niveau de preuve : LECTURE DE CODE seulement, aucun banc.
+
+DEFAUT AVERE
+1. Cache de la feuille de l'application : la CLE oublie le theme de coloration syntaxique.
+   bed/j spyder/utils/stylesheet.py:80-92 smartos_editor_background() lit
+   CONF.get('appearance','selected') -> get_color_scheme(...)['background'], utilise l.431-441
+   (QStatusBar background/border, QMainWindow::separator). cle_de (l.1034-1047) ne contient ni
+   'selected' ni la couleur de fond du schema. Scenario : l'utilisateur passe de « Spyder Dark » a
+   « Monokai » (ou modifie le fond d'un schema perso), redemarre -> cle identique -> barre de statut
+   et separateurs gardent l'ancienne couleur, INDEFINIMENT (jusqu'a un changement de code/police).
+   Amont : recalcule a chaque lancement, donc juste au redemarrage.
+   Piste : ajouter smartos_editor_background() aux ingredients (un appel CONF + un dict, cout nul).
+
+DOUTES
+2. Icones memo (bed/j icon_manager.py:606-621) : la cle (name, resample) ignore l'etat de
+   IMAGE_PATH_MANAGER. Un greffon qui declare IMG_PATH l'ajoute APRES la creation de son conteneur
+   (api/plugins/new_api.py:580-582). Tout get_icon(nom) fait avant -> 'not_found' MEMORISE pour
+   toute la session (amont : juste aux appels suivants) ; idem pour un greffon qui SURCHARGE une
+   icone Spyder existante (image_path_manager.py:44-48). Aucun cas aujourd'hui : aucun IMG_PATH dans
+   Spyder 6.1.5 ni dans les 13 greffons. Latent.
+3. Listes (comboboxes.py:399-401) : hidePopup() saute setStyleSheet si le texte est identique.
+   Amont : setStyleSheet repolit a chaque fermeture. Je n'ai trouve aucun code qui compte sur ce
+   repolissage (pas de surcharge de hidePopup hors SpyderFontComboBox, pas de _css modifie hors
+   SpyderComboBoxWithIcons l.432-434 qui repose lui-meme sa feuille). Doute faible, a voir
+   seulement si une liste reste visuellement « ouverte » (coins droits) apres fermeture.
+
+RIEN TROUVE
+- Feuille app, autres ingredients : theme clair/sombre -> passe par SpyderPalette (dans la cle) ;
+  police (CONF + AppStyle._fs) ; plateforme ; HiDPI : la feuille est en px/pt/em, pas d'echelle
+  dedans. Theme d'interface : redemarrage obligatoire, et la feuille n'est de toute facon calculee
+  qu'une fois par session en amont aussi (_stylesheet_as_string).
+- Appelants de l'instance APP_STYLESHEET : uniquement str()/to_string (auxiliary_widgets.py:79,
+  main_widget.py:1786, mainwindow.py:652, editor/widgets/window.py:425, widgets/comboboxes.py:323
+  et 449, + dialogues de test connectiondialog/projectdialog/arraybuilder). Aucun get_stylesheet(),
+  get_copy() ou set_stylesheet() sur elle, ni dans Spyder ni dans les 13 greffons (ceux-ci
+  n'importent que AppStyle : tortoisehg, claude, konsole). get_copy() sur cache servirait quand
+  meme (_stylesheet vide -> set_stylesheet).
+- Icones, identite : l'amont rendait deja un QIcon neuf a chaque appel ; aucun « is », id(),
+  cacheKey ni addPixmap sur une icone d'ima (le seul cacheKey, tortoisehg _vendor qtlib.py:1140,
+  compare ses propres icones). Couleur desactivee = SpyderPalette.COLOR_DISABLED, fixe par session ;
+  icon_theme non modifiable sans redemarrage. ICONS_BY_EXTENSION (icon_manager.py:503) garde deja
+  des QIcon au niveau module : precedent pour la duree de vie.
+- Listes, constructeur : isinstance(self, SpyderComboBox) exclut bien SpyderFontComboBox ;
+  aucune sous-classe ne surcharge _generate_stylesheet (Spyder + greffons ; InterpreterComboBox du
+  greffon interpreter_toolbar herite de SpyderComboBoxWithIcons sans toucher la feuille).
+  Feuille externe (maininterpreter/confpage.py:106 « margin-left: 3px ») : ecrasee au premier
+  hidePopup en amont comme apres correctif (differe de _css). projects main_widget.py:141
+  showPopup appelle super() : inchange.
+- to_string unique (stylesheet.py:170-174) : equivalent strict.

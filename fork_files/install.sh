@@ -111,6 +111,7 @@ SITE="$("$VENV_PY" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])
 # fork) : il vit A COTE de spyder dans site-packages, pas dedans - "pip install ." ne
 # l'installe donc pas, on le depose ici (meme geste que l'installation SmartOS).
 cp -f "$ICI/smartos_spyder_actions.py" "$SITE/smartos_spyder_actions.py"
+cp -f "$ICI/smartos_startup_trace.py" "$SITE/smartos_startup_trace.py"
 
 echo "== Patch du paquet tiers spyder-kernels"
 "$VENV_PY" "$SUPPORT/patchs-tiers/patch_spyder_kernels_profile_interrupt.py" \

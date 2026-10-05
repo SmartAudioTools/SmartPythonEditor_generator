@@ -1,0 +1,11 @@
+h runs 7 charge [3.3, 3.5, 3.4, 3.3, 3.6, 3.6, 3.4] modules 1814
+i runs 7 charge [3.2, 3.5, 3.4, 3.3, 3.5, 3.5, 3.3] modules 1814
+  main_entree                        | h:     88 [82-99] | i:     88 [81-100]
+  import_mainwindow_fin              | h:    420 [398-466] | i:    421 [392-468]
+  setup_debut                        | h:    440 [416-487] | i:    439 [410-489]
+  decouverte_greffons_internes_fin   | h:   1063 [1020-1148] | i:   1070 [992-1172]
+  setup_fin                          | h:   2331 [2206-2522] | i:   2382 [2159-2430]
+  fenetre_visible                    | h:   2529 [2391-2746] | i:   2413 [2188-2463]
+  editeur_utilisable                 | h:   3291 [3124-3574] | i:   2887 [2587-3110]
+  lsp_pret                           | h:   3739 [3549-4068] | i:   3329 [3039-3571]
+  noyau_pret                         | h:   3364 [3188-4673] | i:   3271 [3065-4658]

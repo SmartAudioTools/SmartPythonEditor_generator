@@ -1,0 +1,113 @@
+MESURES DU WORKER smartpythoneditor-ec POUR smartpythoneditor-03 - 05/10/2026, 01:00-01:45
+Arbres testés : copies dans le scratchpad du worker (banc2/ref et banc2/lazy). ref = spyder/ du fork
++ patch_spyder_startup_trace ; lazy = ref + patch_spyder_lazy_imports_demarrage.py (md5 385aa67a…).
+Ni le fork, ni le venv, ni la config réelle n'ont été touchés. Hors écran (offscreen), HOME et conf jetables.
+
+1. MESURE 1 - ab.py 1a 10 ref lazy (01:19:36-01:23:26, charge 4,29 au départ, 3,1-4,2 pendant)
+   modules chargés : ref 2798, lazy 2274
+     repère                            ref médiane [min-max]   lazy médiane [min-max]
+     main_entree                         158 [144-230]           87 [75-160]
+     import_mainwindow_fin               488 [450-750]          414 [386-710]
+     setup_debut                        1515 [1482-1787]       1441 [1410-1740]
+     decouverte_greffons_internes_fin   2731 [2596-3002]       2373 [2273-3166]
+     setup_fin                          4236 [3969-4643]       3984 [3752-4923]
+     fenetre_visible                    4411 [4124-4832]       4232 [3972-5317]
+     editeur_utilisable                 5429 [5060-5935]       5117 [4748-6124]
+     lsp_pret                           5896 [5452-6456]       5560 [5152-6582]
+     noyau_pret                         5470 [5094-6975]       5270 [4875-7566]
+   Différences APPARIÉES par tour (lazy - ref), médiane / tours négatifs / écart-type de ref :
+     main_entree -74 / 9 sur 10 / 25 ; setup_debut -74 / 9 sur 10 / 88 ;
+     decouverte_greffons_internes_fin -355 (-729..+456) / 9 sur 10 / 123 ;
+     fenetre_visible -177 (-799..+888) / 7 sur 10 / 225 ;
+     editeur_utilisable -298 (-1053..+684) / 7 sur 10 / 256.
+   VERDICT : le gain d'import est net jusqu'à la découverte des greffons (-355 ms, 9 sur 10).
+   Sur fenetre_visible et editeur_utilisable, le gain médian (-177 / -298) est de l'ordre d'UN
+   écart-type, avec 7 tours sur 10 seulement dans le bon sens : PAS au-dessus du bruit au sens
+   strict avec 10 tours. Une partie du gain est seulement reportée (-355 -> -177). À refaire à
+   20 tours et à charge < 2 pour trancher.
+   Curiosité : main_entree gagne déjà 74 ms, donc le patch agit sur des imports faits AVANT main().
+
+2. ÉQUIVALENCE DU RACCOURCI ASCII DE CHARDET - 0 différence sur 513 cas
+   504 fichiers réels (257 UTF-8, 134 ASCII, 8 ISO-8859-1 selon `file`, plus .pyc, .png, .svg,
+   .so) + 9 cas synthétiques (vide, ASCII court, tilde, ESC, NUL, latin-1, utf-8, cp1252,
+   iso2022_jp). Fonctions comparées ref/lazy : get_coding, get_coding(force_chardet),
+   get_coding(default_codec), decode, is_binary_string, is_binary. Le test n'est pas trivial :
+   156 'ascii', 243 'utf-8', 87 None, 21 WINDOWS-1252 ; le cas ESC rend 'utf-8' via chardet,
+   ce qui justifie d'exclure \x1b du raccourci. Script : banc2/echantillon/test_chardet.py.
+
+3. MESURE 2 - cProfile d'un lancement de l'arbre lazy (prof.py : profilage borné par les repères)
+   (a) create_application_fin -> setup_debut (1,018 s) : 1,010 s dans UN SEUL appel,
+       splash.show() (spyder/app/mainwindow.py:1508, juste après create_splash_screen()).
+       Reproduit en PySide6 nu : QSplashScreen(QPixmap(526,340)).show() prend 1001-1005 ms,
+       un 2e QSplashScreen aussi ; un QLabel.show() 0-240 ms. Identique en offscreen, minimal
+       et vnc ; insensible à QT_QPA_PLATFORMTHEME, D-Bus, accessibilité. Le journal Qt place le
+       trou dans la mise en visibilité native de la fenêtre du splash.
+       Interprétation (PROBABLE, non prouvée par la pile native) : QSplashScreen attend
+       l'exposition de sa fenêtre avec un délai de 1000 ms ; ces plateformes sans compositeur
+       n'envoient jamais l'expose, donc le délai expire à chaque fois. => artefact du banc
+       hors écran, très probablement ABSENT sous Wayland réel. Il gonfle chaque run de ~1 s mais
+       à l'identique pour ref et lazy : la comparaison A/B reste loyale, les absolus non.
+       Non vérifié : pile native (gdb/eu-stack) et durée sous Wayland réel.
+   (b) qstylizer, lancement complet (tottime total 7,36 s) : 0,858 s propres, 1 056 068 appels,
+       dont get_attributes 0,428 s (49 942 appels), selector 0,084 s, name 0,059 s,
+       scope_operator 0,046 s. Appelants Spyder (temps passé dans qstylizer via l'arc) :
+         0,652 s     1  spyder/utils/stylesheet.py:171 set_stylesheet (feuille globale de l'appli)
+         0,135 s   279  spyder/api/widgets/comboboxes.py:235 _generate_stylesheet
+         0,053 s   228  spyder/utils/stylesheet.py:115 to_string
+         0,043 s   100  spyder/widgets/dock.py:141 _apply_stylesheet
+         0,034 s    89  spyder/api/widgets/menus.py:151 __init__
+         0,033 s    43  spyder/api/widgets/menus.py:525 _generate_stylesheet
+         0,031 s   100  spyder/widgets/dock.py:117 _stylesheet
+         0,030 s   100  spyder/widgets/dock.py:228 _apply_stylesheet
+         0,027 s    39  spyder/api/widgets/status.py:181 _generate_stylesheet
+         0,025 s    66  spyder/api/widgets/toolbars.py:202 __init__
+       => 3/4 du coût est UNE feuille, la globale, calculée une fois : un cache disque de sa
+       chaîne finale (clé version/thème/police/DPI) viserait ~0,6 s sans toucher aux widgets.
+   (c) top 20 tottime setup_debut -> editeur_utilisable :
+         2,352 s   2488  _find_and_load            (VOIR RÉSERVE)
+         0,370 s  46234  qstylizer stylerule.get_attributes
+         0,231 s   2438  builtins.compile
+         0,217 s    635  QWidget.setStyleSheet
+         0,214 s  3,3 M  isinstance
+         0,142 s   1873  marshal.loads
+         0,119 s 242090  ast._convert (literal_eval)
+         0,106 s   3352  SignalInstance.connect
+         0,103 s     26  QDockWidget.setWidget
+         0,098 s    282  QIcon.pixmap
+         0,091 s     98  processEvents
+         0,073 s 144339  qstylizer selector
+         0,070 s   1873  _compile_bytecode
+         0,066 s     48  QSplashScreen.showMessage
+         0,060 s    129  icon_manager.get_icon
+         0,056 s      3  widgets/browser.py:99 __init__
+         0,053 s      2  QTermWidget.startShellProgram
+         0,053 s   4750  __build_class__
+         0,050 s 110231  qstylizer name
+         0,050 s 132633  dict.update
+       RÉSERVE : ce profil démarre au milieu de la pile (repère setup_debut) ; les cumuls y sont
+       FAUX (importlib.metadata.version 1,19 s, realpath 1,15 s, preparer_schema de spyder_konsole
+       1,11 s en cumul, alors que leurs arcs appelants ne totalisent que quelques ms), et le
+       tottime de _find_and_load (> son cumtime) est un artefact de cProfile sur les imports
+       récursifs. Fiables : les tottime des fonctions feuilles (qstylizer, setStyleSheet,
+       compile, connect...). Pistes à vérifier : compile x2438 et literal_eval x242k (qui les
+       appelle ? l'arc principal compile vient de 1558 appels d'un même appelant non résolu).
+
+Fichiers bruts (scratchpad du worker, non persistants) :
+/tmp/claude-1001/-DATA-Python-FORKS-SmartPythonEditor/7b3fe970-69ee-4ca1-ae99-1546421386ed/scratchpad/banc2/
+  mesure1.log, traces/, prof/{phases-A,phases-C,total-T}.prof, prof.py, run_prof.sh, show2.py, ana.py
+
+4. ÉCRAN DE DÉMARRAGE MASQUÉ (demande de l'utilisateur, 01:29 : « cache l'écran de démarrage
+   pour l'instant s'il y a un doute dessus ») - spyder_patch/patch_spyder_splash_off.py, NON
+   branché dans appliquer_correctifs_spyder.sh (fichier en cours de modification par 03).
+   - mainwindow.main() : splash = None (chemin prévu par l'amont, cf. pytest).
+   - DÉFAUT TROUVÉ au premier essai : plugins/editor/widgets/recover.py:68 teste
+     hasattr(parent, 'splash') puis appelle self.splash.hide() -> AttributeError et plantage
+     au démarrage dès qu'il y a des sauvegardes automatiques à récupérer. Second bloc du patch :
+     getattr(parent, 'splash', None) is not None. Recherche exhaustive (grep « splash » dans
+     spyder/, hors tests) : c'était le seul usage non protégé ; restart.py non touché.
+   - A/B entrelacé, 6 tours, charge 2,8-3,8 (traces nosplash2-*) : setup_debut 1437 -> 425,
+     fenetre_visible 4023 -> 3008, editeur_utilisable 4882 -> 3939 (-943 ms), tous les
+     intervalles disjoints. Gain mesuré HORS ÉCRAN uniquement : sous Wayland réel, à mesurer
+     avant de décider s'il reste.
+   - Écarté : retirer le splash par la config (aucune option Spyder n'existe pour ça) ; rendre
+     None depuis create_splash_screen() (casserait restart.py, qui ne gère pas None).

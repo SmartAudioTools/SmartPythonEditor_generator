@@ -1,0 +1,71 @@
+RELECTURE CRITIQUE - patch_spyder_config_rapide.py, bloc ECRITURE GROUPEE (worker ec, 05/10/2026 ~01:50)
+Demande de 03 : tout code qui lit un .ini de configuration sur disque juste apres un set(), ou qui
+depend de sa presence immediate. Arbre lu : scratchpad 03 bed/g (marqueur
+_smartos_config_ecriture_groupee present). Niveau de preuve : LECTURE DE CODE seulement, aucun banc.
+
+Rappel du mecanisme : differe seulement si QApplication existe ET fil principal. CONF (MultiUserConfig)
+est construit a l'import, AVANT QApplication -> toutes les ecritures du constructeur restent immediates.
+
+CAS REELS (le comportement change par rapport a l'amont)
+1. spyder/plugins/projects/widgets/main_widget.py:618-619 delete_project
+   close_project() -> set_project_filenames (l.572) -> api.py:82 set_option("recent_files") -> _save
+   DIFFERE ; puis l.619 shutil.rmtree(<projet>/.spyproject) immediatement. 300 ms plus tard la
+   minuterie ecrit dans un dossier disparu : user.py _save -> FileNotFoundError -> branche « delete
+   and sleep » (time.sleep(0.05) dans le fil principal) -> nouvel echec -> imprime « Failed to write
+   user configuration file to disk ». PAS de resurrection du projet (os.makedirs n'est fait que
+   dans DefaultsConfig.__init__). Effet : bruit sur stdout + 50 ms de gel. Amont : ecriture avant
+   rmtree, silencieux.
+   Piste : a l'echeance, ne pas ecrire une config dont le dossier n'existe plus
+   (osp.isdir(osp.dirname(get_config_fpath()))).
+
+2. spyder/config/manager.py:157-172 register_plugin, branche old_spyder_version < 54.0.0
+   plugin_config.cleanup() = user.py:1024-1027 (MultiUserConfig) os.remove SANS retirer l'objet de
+   _smartos_en_attente ; idem UserConfig.cleanup user.py:630-632. Si le premier plugin_config a mis
+   une ecriture en attente (seul chemin : _remove_deprecated_options -> remove_option/_save, donc
+   changement de version MAJEURE du greffon), la minuterie RECREE le .ini efface avec l'ancien
+   contenu apres la construction du second -> annule en partie le correctif amont #11132.
+   Atteignable seulement en migrant une config Spyder < 5 (CONF 54.0.0) : pratiquement nul sous
+   SmartOS. Piste peu chere : cleanup() retire self (et les sous-configs) de _smartos_en_attente.
+
+3. spyder/app/mainwindow.py:1503 + 1516-1519 --reset (lance par restart.py:254 pour « remettre
+   a zero ») : QApplication existe deja, CONF.reset_to_defaults() differe, puis `return` sans
+   app.exec_() -> aboutToQuit n'est JAMAIS emis : l'ecriture ne tient QUE par atexit. Fonctionne
+   (sortie normale de l'interpreteur, restart.py:257 attend la fin du processus), mais c'est le
+   seul chemin ou le filet atexit est indispensable : tout os._exit() futur l'annulerait.
+
+NON-CAS (parcourus, verdict)
+- restart.py:34,167-168 : nouveau processus qui lit CONF (high_dpi_*) pendant que l'ancien vit
+  encore -> peut lire une valeur posee < 300 ms avant ; ne sert qu'a l'echelle du splash de
+  redemarrage. restart.py:244-252 attend la MORT de l'ancien PID avant de lancer le nouveau
+  Spyder ; l'ancien a vide son attente a aboutToQuit (app.exec_() dans app/utils.py:413, puis
+  ORIGINAL_SYS_EXIT mainwindow.py:1591 -> atexit). Ordre preserve.
+- application/plugin.py:703-760 restart() : closing() puis console.quit() -> sig_quit_requested ->
+  fermeture normale. Aucun os._exit dans l'arbre hormis manager.py:824 (echec de chargement de
+  config, avant QApplication).
+- _make_backup (user.py:348-367, appele l.236 et 253) : copie le .ini disque dans le constructeur ;
+  CONF : avant QApplication ; configs de greffons (register_plugin) : fichier de la session
+  precedente, deja vide. Seul risque = le cas 2.
+- _load_from_ini dans le constructeur, to_list (user.py:645, appele manager.py:69 config SITE,
+  load=False, a l'import) : avant QApplication, immediat.
+- _save_new_defaults / _load_old_defaults : fichiers defaults/ d'une AUTRE version, jamais relus
+  dans la meme session ; double ecriture possible si recree < 300 ms, contenu identique.
+- projects/widgets/main_widget.py:1113-1135 _load_project_type_class (configparser DIRECT sur
+  workspace.ini) : appele seulement si project_type is None (l.511) ; create_project (l.435-452)
+  passe l'objet, donc pas de relecture apres creation. Reouverture du meme projet : le nouvel
+  objet est construit (l.512-516) AVANT l'ecriture des fichiers de l'ancien (l.528) - deja
+  perime en amont, inchange.
+- projects/api.py:46-50 rmtree du dossier config sur configparser.Error : seulement a la
+  construction, sur un fichier deja corrompu.
+- SmartOS : smartos_spyder_actions.py (verrou spyder.lock, pas de .ini) ; lanceur
+  SmartOS/Commun/scripts/SmartPythonEditor.sh:28-38 n'ecrit transient.ini que si aucun spyder ne
+  tourne ; preparer_config_reference.py / install.sh : hors execution.
+- Noyaux : spyder_kernels 3.1.5 (venv SmartPythonEditor et SmartPython-3.12.13) - aucune lecture
+  de spyder.ini / spyder-py3 / configparser. Reglages passes par l'environnement et les comms.
+- LSP : pylsp/config/source.py lit les fichiers du PROJET (setup.cfg...), pas spyder.ini ;
+  pyls_spyder idem. Reglages passes par didChangeConfiguration.
+- Greffons SmartPythonEditorPlugins (13) : tous les acces passent par CONF / get_conf ;
+  window_controls/kde.py:95,146 lit kwinrulesrc et BreezeDark.colors (KDE, pas Spyder) ;
+  viztracer/kernel/cell_magic.py:56 et line_profiler profile_results.py : dossiers de resultats,
+  pas de .ini ; tortoisehg wconfig.py : hgrc. Aucun processus de greffon ne relit un .ini Spyder.
+- Fils : un set() hors fil principal ecrit tout de suite et retire l'objet de l'attente ;
+  ecritures concurrentes du meme fichier deja possibles en amont.

@@ -1,0 +1,51 @@
+APPELANTS DE compile / ast.literal_eval ET FEUILLES QComboBox AU DÉMARRAGE - worker ec, 05/10/2026 01:35
+Arbre : 03/scratchpad/bed/c (fork + trace + 1a + 1c), contrôlé : spyder.__file__ = .../bed/c/spyder/__init__.py.
+Méthode : un lancement offscreen (run.sh, HOME/conf jetables) sous banc2/espion.py, qui enveloppe
+builtins.compile, ast.literal_eval et _SpyderComboBoxMixin._generate_stylesheet, compte par pile
+(6 cadres), et vide en JSON au repère editeur_utilisable. Fenêtre : TOUT le démarrage (main_entree ->
+editeur_utilisable), pas seulement setup_debut -> editeur. Temps mesurés sous enveloppe (surcoût
+inclus), à lire comme ordres de grandeur. Un seul lancement. Rien n'a été corrigé.
+
+Q1 - compile : 3118 appels.
+  - 2125 (68 %) = ast.parse appelé PAR ast.literal_eval (mode eval, PyCF_ONLY_AST, '<unknown>') :
+    c'est la question 2, voir plus bas. À eux seuls ~337 ms de compile sous enveloppe, dont
+    264 ms pour 360 appels venant de ConfigurationManager.get (manager.py:518, options TUPLES).
+  - 581 = typing.ForwardRef (typing.py:904, annotations en chaîne compilées en eval), ~5 ms au total.
+  - ~60 = attrs (classes générées : mercurial.store_utils, mercurial.thirdparty.attr, jsonschema,
+    aiohttp.tracing), ~5 ms.
+  - 14 seulement = code source .py compilé (bytes, exec) : les .pyc sont donc presque tous
+    valides ; ce n'est PAS de la recompilation de modules. Pas de jedi/parso. re.compile n'est
+    pas builtins.compile (non compté ici).
+  => « l'appelant aux 1558 appels » du profil = ast.parse sous literal_eval, venant de la config.
+
+Q2 - ast.literal_eval : 2125 appels, TOUS depuis spyder/config/user.py UserConfig.get
+  (ligne 537 : valeurs non scalaires ; ligne 527 : booléens, chaînes 'True'/'False').
+  Par appelant (n, octets cumulés, plus longue chaîne) :
+    325   3 016 325 o  max 9281   manager.py:518 get (option TUPLE) <- new_api.get_conf
+                                  <- plugins/completion/api.py:1248 get_conf
+                                  données : le dict ENTIER 'completions/provider_configuration'
+                                  ({'fallback':…, 'lsp':…, …}) reparsé à CHAQUE lecture d'une
+                                  sous-clé : ~9,3 Ko × 325 = 3 Mo de texte parsés.
+     33     343 233 o  max 10401  run/container.py:1025 get_executor_configuration_parameters
+                                  (dict des paramètres d'exécuteurs, même schéma).
+    234+189+189+90+54+45  ~19 Ko  get_color_scheme / set_color_scheme / is_dark_font_color
+                                  (gui.py, syntaxhighlighters.py) : tuples ('#DFE1E2', False, False)
+                                  ~25 o, schéma de couleurs relu clé par clé, ~800 appels.
+    107+52              ~0,7 Ko   booléens 'True'/'False' (notify_observers, completion get_conf).
+  Coût : il est dans les deux grosses entrées (3,36 Mo parsés) ; les ~1600 petits appels pèsent
+  peu à l'unité. Le parcours ast._convert (242 090 appels du profil) vient de ces mêmes dicts.
+  Piste (pas faite) : mémoïser UserConfig.get par (section, option, chaîne brute) ->
+  valeur parsée, rendue par copy.deepcopy (les valeurs sont mutables et modifiées par les
+  appelants), invalidée par set(). Ou, plus étroit : mémoïser seulement le dict de base dans
+  ConfigurationManager.get pour les options tuples.
+
+Q3 - QComboBox : 31 appels de _SpyderComboBoxMixin._generate_stylesheet (seule définition dans
+  comboboxes.py), depuis comboboxes.py:212 (__init__ du mixin) <- :295 ; classes : PatternComboBox 9,
+  SearchText 7, SpyderComboBox 5, PythonModulesComboBox 2, SpyderComboBoxWithIcons 2, SearchIn/
+  Object/Url/SmartosProject/WorkingDirectory/Interpreter 1 chacune.
+  UNE SEULE feuille distincte (md5 5142bc228b, 302 caractères) pour les 31.
+  Correction de mon rapport précédent : « 279 » n'était pas un nombre de constructions mais la
+  somme des appels d'arcs vers les fonctions de qstylizer depuis _generate_stylesheet.
+  => cache trivialement correct (une constante par processus), comme pour les menus.
+
+Bruts : scratchpad du worker ec, banc2/espion.json, espion.py, run_espion.sh, trace-espion.json.
