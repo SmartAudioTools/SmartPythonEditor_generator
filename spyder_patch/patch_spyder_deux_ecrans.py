@@ -727,6 +727,20 @@ def main():
         print("Patch mode deux ecrans deja applique.")
         return 0
 
+    # Rejeu sur un fichier que patch_spyder_deux_ecrans_maximize.py a deja repris : il a insere ses
+    # methodes DANS le bloc et reecrit la boucle (HIDE_NEW n'y est plus), donc le test ci-dessus ne
+    # peut pas repondre. On compare le bloc une fois ses methodes otees ; s'il differe, c'est une
+    # version anterieure, que ce patch ne sait pas mettre a jour sous l'autre.
+    import patch_spyder_deux_ecrans_maximize as maximize
+    if maximize.MARKER in source:
+        if ("\n\n" + BLOC) in source.replace(maximize.BLOC_METHODES, "") \
+                and "_smartos_installer_deux_ecrans)" in source:
+            print("Patch mode deux ecrans deja applique (et repris par le patch maximize).")
+            return 0
+        print(f"{path} porte une version anterieure du patch deux ecrans SOUS le patch maximize : "
+              f"reinstaller le fichier d'origine puis rejouer la chaine.", file=sys.stderr)
+        return 1
+
     if source.count(DEBUT_BLOC) > 1:
         print(f"{path} contient DEUX blocs SmartOS deux ecrans : une version anterieure du patch "
               f"s'y est ajoutee sans retirer la precedente. Reinstaller le fichier plutot que de "

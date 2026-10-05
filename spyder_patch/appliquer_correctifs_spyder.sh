@@ -248,6 +248,14 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
   # Points d'entree des paquets lus UNE fois pendant le demarrage au lieu de cinq
   # (importlib.metadata.entry_points : 37 -> 8 ms mesures in situ, 05/10/2026).
   python3 "$GEN_DIR/spyder_patch/patch_spyder_points_entree_memo.py" "$ROOT/spyder/app/start.py"
+  # Defaut AMONT, plus expose depuis que le demarrage est court : Spyder ferme pendant que le
+  # noyau repond a sa premiere requete restait vivant sans fenetre, a 100 % d'un coeur
+  # (KernelComm._wait boucle sans fin, QEventLoop.exec() rendant -1 une fois quit() appele).
+  # Second bloc : une console fermee avant la reponse asynchrone qui lance son noyau n'en lance
+  # plus (noyaux orphelins, abandon de Qt a la sortie). Test du premier bloc :
+  # outils/banc_demarrage/test_attente_noyau_fermeture.py (05/10/2026).
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_attente_noyau_fermeture.py" \
+    "$ROOT/spyder/plugins/ipythonconsole"
 
   # --- Deux defauts AMONT de PySide6 >= 6.9 face au modele objet de Spyder 6.1.5 (26/07/2026).
   #     Sans eux, Spyder ne demarre PAS du tout sous PySide6 6.11 : « Target signal has been
