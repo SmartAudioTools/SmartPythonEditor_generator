@@ -17,6 +17,9 @@ echoue pour une raison quelconque, on retombe silencieusement sur SpyderPalette.
 (valeur du theme sombre par defaut) : une couleur legerement fausse est preferable a un Spyder qui
 refuse de demarrer sur une exception dans sa feuille de style.
 
+Le meme fichier retire aussi les fleches des barres de defilement (10/10/2026) : c'est la meme
+methode de la meme feuille, un patch a part aurait recopie toute la mecanique ast pour un bloc.
+
 Ce qui n'est deliberement PAS touche :
 - l'etat :hover des separateurs (#60798B) et des boutons de la barre d'outils : c'est le seul
   retour visuel indiquant qu'un separateur est saisissable / qu'un bouton est survole ; les
@@ -93,6 +96,25 @@ STATUSBAR_PATCH = '''
         )
 '''
 
+# Ajoute a la fin de AppStylesheet._customize_stylesheet. QDarkStyle dessine aux deux bouts de chaque
+# barre de defilement un petit triangle (::add-line / ::sub-line), et reserve 16 px de marge pour
+# eux : demande de l'utilisateur (10/10/2026), les retirer partout. qstylizer eclate les selecteurs a
+# virgule de QDarkStyle ("...:hover, ...:on") en regles separees, d'ou les trois variantes : sans
+# elles, le triangle reapparaitrait au survol. Mesure hors ecran sur une QScrollBar de 300 px :
+# sous-controles add/sub ramenes a 0x0, gouttiere de 266 a 294 px.
+SCROLLBAR_MARKER = "# Barres de defilement sans fleches"
+SCROLLBAR_PATCH = '''
+        # Barres de defilement sans fleches (ajout SmartOS, cf. patch_spyder_colors.py) : la
+        # gouttiere occupe toute la longueur, la marge de 16 px reservee aux fleches disparait.
+        for orientation in ('vertical', 'horizontal'):
+            css[f'QScrollBar:{orientation}'].setValues(margin='2px')
+            for ligne in ('add-line', 'sub-line'):
+                for etat in ('', ':hover', ':on'):
+                    css[f'QScrollBar::{ligne}:{orientation}{etat}'].setValues(
+                        width='0px', height='0px', margin='0px'
+                    )
+'''
+
 # Ajoute a la fin de ApplicationToolbarStylesheet.set_stylesheet, apres le
 # "css.QToolBar.setValues(backgroundColor=SpyderPalette.COLOR_BACKGROUND_4)" de Spyder.
 TOOLBAR_MARKER = "# Barre d'outils principale a la couleur de fond de l'editeur"
@@ -132,6 +154,7 @@ def main():
     targets = [
         ('AppStylesheet', '_customize_stylesheet', SEPARATORS_MARKER, SEPARATORS_PATCH),
         ('AppStylesheet', '_customize_stylesheet', STATUSBAR_MARKER, STATUSBAR_PATCH),
+        ('AppStylesheet', '_customize_stylesheet', SCROLLBAR_MARKER, SCROLLBAR_PATCH),
         ('ApplicationToolbarStylesheet', 'set_stylesheet', TOOLBAR_MARKER, TOOLBAR_PATCH),
     ]
 
@@ -184,7 +207,7 @@ def main():
         f.write(patched)
 
     print("Patch couleurs Spyder applique (barre d'outils, separateurs de docks et barre de statut "
-          "alignes sur le fond de l'editeur).")
+          "alignes sur le fond de l'editeur, barres de defilement sans fleches).")
     return 0
 
 
