@@ -101,13 +101,23 @@ STATUSBAR_PATCH = '''
 # eux : demande de l'utilisateur (10/10/2026), les retirer partout. qstylizer eclate les selecteurs a
 # virgule de QDarkStyle ("...:hover, ...:on") en regles separees, d'ou les trois variantes : sans
 # elles, le triangle reapparaitrait au survol. Mesure hors ecran sur une QScrollBar de 300 px :
-# sous-controles add/sub ramenes a 0x0, gouttiere de 266 a 294 px.
+# sous-controles add/sub ramenes a 0x0, gouttiere de 266 a 294 px. Le contour de la gouttiere
+# (#455364 chez QDarkStyle) est rendu a demi transparent (demande du 11/10/2026).
 SCROLLBAR_MARKER = "# Barres de defilement sans fleches"
 SCROLLBAR_PATCH = '''
         # Barres de defilement sans fleches (ajout SmartOS, cf. patch_spyder_colors.py) : la
         # gouttiere occupe toute la longueur, la marge de 16 px reservee aux fleches disparait.
+        # Son contour est le gris de QDarkStyle a demi transparent (#2F3B48 sur le fond spyder/dark) :
+        # 1px de feuille de style vaut 2 pixels reels sur un ecran a l'echelle 2, plus fin est
+        # impossible ; la transparence l'estompe en suivant la couleur du fond, quelle qu'elle soit.
+        gris = SpyderPalette.COLOR_BACKGROUND_4.lstrip('#')
+        smartos_contour = 'rgba({}, {}, {}, 50%)'.format(
+            *(int(gris[k:k + 2], 16) for k in (0, 2, 4))
+        )
         for orientation in ('vertical', 'horizontal'):
-            css[f'QScrollBar:{orientation}'].setValues(margin='2px')
+            css[f'QScrollBar:{orientation}'].setValues(
+                margin='2px', border=f'1px solid {smartos_contour}'
+            )
             for ligne in ('add-line', 'sub-line'):
                 for etat in ('', ':hover', ':on'):
                     css[f'QScrollBar::{ligne}:{orientation}{etat}'].setValues(
