@@ -309,6 +309,14 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
   # compris ceux des plugins. Cf. Commun/scripts_installation/spyder_patch/patch_spyder_dock_browse_tabs.py.
   python3 "$GEN_DIR/spyder_patch/patch_spyder_dock_browse_tabs.py" \
     "$ROOT/spyder/widgets/tabs.py"
+  # Volet qui a le focus : onglet actif en bleu (propriete smartos_focus sur sa barre, lue par la
+  # regle posee par patch_spyder_colors.py), editeur, marges et console eclaircis. Apres
+  # patch_spyder_colors (SMARTOS_ECLAIRCISSEMENT). Cf. spyder_patch/patch_spyder_focus_volet.py.
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_focus_volet.py" \
+    "$ROOT/spyder/widgets/tabs.py" \
+    "$ROOT/spyder/plugins/editor/widgets/base.py" \
+    "$ROOT/spyder/plugins/editor/widgets/codeeditor/codeeditor.py" \
+    "$ROOT/spyder/plugins/ipythonconsole/utils/style.py"
   # Retire de la barre d'outils les boutons execution par cellules / selection-ligne (y compris
   # variantes debogueur/profileur), creation de cellule, Preferences et gestionnaire de PYTHONPATH
   # (l'execution du fichier reste). SUPPRIME reellement les boutons (retires de _item_map et

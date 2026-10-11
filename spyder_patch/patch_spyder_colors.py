@@ -65,6 +65,17 @@ def smartos_editor_background():
         return SpyderPalette.COLOR_BACKGROUND_1
 '''
 
+# Facteur d'eclaircissement d'un volet qui a le focus, le meme que celui des greffons Claude et
+# Konsole (konsole_view.ECLAIRCISSEMENT). Bloc a part, avec son propre marqueur, pour etre pose
+# aussi sur un stylesheet.py deja patche par une version anterieure de ce script.
+ECLAIRCISSEMENT_MARKER = 'SMARTOS_ECLAIRCISSEMENT = '
+ECLAIRCISSEMENT = '''
+
+# Volet qui a le focus eclairci de ce facteur (ajout SmartOS, cf. patch_spyder_colors.py et
+# patch_spyder_focus_volet.py) : QColor.lighter, le meme que les greffons Claude et Konsole.
+SMARTOS_ECLAIRCISSEMENT = 112
+'''
+
 # Ajoute a la fin de AppStylesheet._customize_stylesheet : le selecteur existe deja dans la feuille
 # QDarkStyle (background-color #455364), on ne fait qu'en redefinir la couleur.
 SEPARATORS_MARKER = "# Separateurs de docks a la couleur de fond de l'editeur"
@@ -143,17 +154,18 @@ TABS_MARKER = "# Onglet actif ouvert sur son volet"
 TABS_PATCH = '''
         # Onglet actif ouvert sur son volet (ajout SmartOS, cf. patch_spyder_colors.py) : il a un
         # contour en haut, a gauche et a droite, pas en bas, et le cadre du volet s'interrompt
-        # sous lui. Le volet remonte de 2px sous la barre (top) pour que les deux dernieres lignes
-        # de l'onglet actif, au fond de l'editeur, recouvrent le trait haut du cadre, y compris
-        # quand il fait 2px (panneau Claude au focus) ; la barre et les autres onglets deviennent
-        # transparents et s'arretent 2px au-dessus. Le premier onglet perd 1px de la marge gauche
-        # de qdarkstyle (2px) et le coin haut-gauche du cadre devient droit : contour de l'onglet
+        # sous lui. Le volet remonte de 1px sous la barre (top) pour que la derniere ligne de
+        # l'onglet actif, au fond de l'editeur, recouvre le trait haut du cadre (1px partout
+        # depuis le 11/10/2026 ; avec 2px, les onglets descendaient trop bas) ; la barre et les
+        # autres onglets deviennent transparents et s'arretent 1px au-dessus. Le premier onglet
+        # perd 1px de la marge gauche de qdarkstyle (2px) et le coin haut-gauche du cadre
+        # devient droit : contour de l'onglet
         # et cadre du volet sur la meme verticale (mesure en documentMode, celui des vrais volets).
         # padding-bottom compense le soulignement de 3px retire : texte au meme niveau.
-        css['QTabWidget::pane'].setValues(top='-2px', borderTopLeftRadius='0px')
+        css['QTabWidget::pane'].setValues(top='-1px', borderTopLeftRadius='0px')
         css[f'QTabBar{self.OBJECT_NAME}'].setValues(background='transparent')
         css[f'QTabBar{self.OBJECT_NAME}::tab'].setValues(
-            marginBottom='2px', background='transparent', borderBottomColor='transparent')
+            marginBottom='1px', background='transparent', borderBottomColor='transparent')
         css[f'QTabBar{self.OBJECT_NAME}::tab:first'].setValues(marginLeft='1px')
         for state in ['selected', 'selected:hover']:
             css[f'QTabBar{self.OBJECT_NAME}::tab:{state}'].setValues(
@@ -164,6 +176,33 @@ TABS_PATCH = '''
                 borderTopRightRadius='4px',
                 marginBottom='0px',
                 paddingBottom='7px',
+            )
+'''
+
+
+VIEWS_FOCUS_MARKER = "# Vues arbre, liste et table eclaircies quand elles ont le focus"
+VIEWS_FOCUS_PATCH = '''
+        # Vues arbre, liste et table eclaircies quand elles ont le focus (ajout SmartOS, cf.
+        # patch_spyder_colors.py), comme les volets des greffons Claude et Konsole : demande de
+        # l'utilisateur, 11/10/2026 (explorateur de fichiers, plan, recherche...).
+        from qtpy.QtGui import QColor
+        for view in ['QTreeView', 'QListView', 'QTableView', 'QColumnView']:
+            css[f'{view}:focus'].setValues(backgroundColor=QColor(
+                SpyderPalette.COLOR_BACKGROUND_1).lighter(SMARTOS_ECLAIRCISSEMENT).name())
+'''
+
+TABS_FOCUS_MARKER = "# Onglet actif en bleu quand son volet a le focus"
+TABS_FOCUS_PATCH = '''
+        # Onglet actif en bleu quand son volet a le focus (ajout SmartOS, cf.
+        # patch_spyder_colors.py) : contour a la couleur du liseret de focus de qdarkstyle, fond
+        # eclairci comme le contenu du volet. La propriete smartos_focus est posee sur la barre
+        # par spyder/widgets/tabs.py (patch_spyder_focus_volet.py), qui suit le focus.
+        from qtpy.QtGui import QColor
+        for state in ['selected', 'selected:hover']:
+            css[f'QTabBar{self.OBJECT_NAME}[smartos_focus="true"]::tab:{state}'].setValues(
+                borderColor=SpyderPalette.COLOR_ACCENT_3,
+                backgroundColor=QColor(smartos_editor_background()).lighter(
+                    SMARTOS_ECLAIRCISSEMENT).name(),
             )
 '''
 
@@ -198,6 +237,8 @@ def main():
         ('AppStylesheet', '_customize_stylesheet', SCROLLBAR_MARKER, SCROLLBAR_PATCH),
         ('ApplicationToolbarStylesheet', 'set_stylesheet', TOOLBAR_MARKER, TOOLBAR_PATCH),
         ('PanesTabBarStyleSheet', 'set_stylesheet', TABS_MARKER, TABS_PATCH),
+        ('AppStylesheet', '_customize_stylesheet', VIEWS_FOCUS_MARKER, VIEWS_FOCUS_PATCH),
+        ('PanesTabBarStyleSheet', 'set_stylesheet', TABS_FOCUS_MARKER, TABS_FOCUS_PATCH),
     ]
 
     # (numero de ligne apres laquelle inserer, texte a inserer). Insertions appliquees de la
@@ -216,6 +257,11 @@ def main():
                   "patch couleurs abandonne.", file=sys.stderr)
             return 1
         insertions.append((last_import_line, HELPER))
+
+    if ECLAIRCISSEMENT_MARKER not in source:
+        last_import_line = max(node.end_lineno for node in tree.body
+                               if isinstance(node, (ast.Import, ast.ImportFrom)))
+        insertions.append((last_import_line, ECLAIRCISSEMENT))
 
     for class_name, method_name, marker, patch in targets:
         if marker in source:
@@ -249,7 +295,8 @@ def main():
         f.write(patched)
 
     print("Patch couleurs Spyder applique (barre d'outils, separateurs de docks et barre de statut "
-          "alignes sur le fond de l'editeur, barres de defilement sans fleches, onglet actif ouvert sur son volet).")
+          "alignes sur le fond de l'editeur, barres de defilement sans fleches, onglet actif "
+          "ouvert sur son volet, volet qui a le focus eclairci et onglet actif en bleu).")
     return 0
 
 
