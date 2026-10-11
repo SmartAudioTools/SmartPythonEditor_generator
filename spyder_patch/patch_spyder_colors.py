@@ -114,10 +114,13 @@ SCROLLBAR_PATCH = '''
         smartos_contour = 'rgba({}, {}, {}, 50%)'.format(
             *(int(gris[k:k + 2], 16) for k in (0, 2, 4))
         )
-        for orientation in ('vertical', 'horizontal'):
+        # Curseur sans contour, et barre affinee de 16 a 12px (curseur de 6px).
+        for orientation, epaisseur in (('vertical', 'width'), ('horizontal', 'height')):
             css[f'QScrollBar:{orientation}'].setValues(
-                margin='2px', border=f'1px solid {smartos_contour}'
+                margin='2px', border=f'1px solid {smartos_contour}', **{epaisseur: '12px'}
             )
+            for etat in ('', ':hover', ':focus'):
+                css[f'QScrollBar::handle:{orientation}{etat}'].setValues(border='0px')
             for ligne in ('add-line', 'sub-line'):
                 for etat in ('', ':hover', ':on'):
                     css[f'QScrollBar::{ligne}:{orientation}{etat}'].setValues(
@@ -134,6 +137,34 @@ TOOLBAR_PATCH = '''
         css.QToolBar.setValues(
             backgroundColor=smartos_editor_background()
         )
+'''
+
+TABS_MARKER = "# Onglet actif ouvert sur son volet"
+TABS_PATCH = '''
+        # Onglet actif ouvert sur son volet (ajout SmartOS, cf. patch_spyder_colors.py) : il a un
+        # contour en haut, a gauche et a droite, pas en bas, et le cadre du volet s'interrompt
+        # sous lui. Le volet remonte de 2px sous la barre (top) pour que les deux dernieres lignes
+        # de l'onglet actif, au fond de l'editeur, recouvrent le trait haut du cadre, y compris
+        # quand il fait 2px (panneau Claude au focus) ; la barre et les autres onglets deviennent
+        # transparents et s'arretent 2px au-dessus. Le premier onglet perd 1px de la marge gauche
+        # de qdarkstyle (2px) et le coin haut-gauche du cadre devient droit : contour de l'onglet
+        # et cadre du volet sur la meme verticale (mesure en documentMode, celui des vrais volets).
+        # padding-bottom compense le soulignement de 3px retire : texte au meme niveau.
+        css['QTabWidget::pane'].setValues(top='-2px', borderTopLeftRadius='0px')
+        css[f'QTabBar{self.OBJECT_NAME}'].setValues(background='transparent')
+        css[f'QTabBar{self.OBJECT_NAME}::tab'].setValues(
+            marginBottom='2px', background='transparent', borderBottomColor='transparent')
+        css[f'QTabBar{self.OBJECT_NAME}::tab:first'].setValues(marginLeft='1px')
+        for state in ['selected', 'selected:hover']:
+            css[f'QTabBar{self.OBJECT_NAME}::tab:{state}'].setValues(
+                backgroundColor=smartos_editor_background(),
+                border=f'1px solid {SpyderPalette.COLOR_BACKGROUND_4}',
+                borderBottom='0px',
+                borderTopLeftRadius='4px',
+                borderTopRightRadius='4px',
+                marginBottom='0px',
+                paddingBottom='7px',
+            )
 '''
 
 
@@ -166,6 +197,7 @@ def main():
         ('AppStylesheet', '_customize_stylesheet', STATUSBAR_MARKER, STATUSBAR_PATCH),
         ('AppStylesheet', '_customize_stylesheet', SCROLLBAR_MARKER, SCROLLBAR_PATCH),
         ('ApplicationToolbarStylesheet', 'set_stylesheet', TOOLBAR_MARKER, TOOLBAR_PATCH),
+        ('PanesTabBarStyleSheet', 'set_stylesheet', TABS_MARKER, TABS_PATCH),
     ]
 
     # (numero de ligne apres laquelle inserer, texte a inserer). Insertions appliquees de la
@@ -217,7 +249,7 @@ def main():
         f.write(patched)
 
     print("Patch couleurs Spyder applique (barre d'outils, separateurs de docks et barre de statut "
-          "alignes sur le fond de l'editeur, barres de defilement sans fleches).")
+          "alignes sur le fond de l'editeur, barres de defilement sans fleches, onglet actif ouvert sur son volet).")
     return 0
 
 

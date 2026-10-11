@@ -136,6 +136,9 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
   # l'utilisateur). Cf.
   # Commun/scripts_installation/spyder_patch/patch_spyder_colors.py pour le detail complet.
   python3 "$GEN_DIR/spyder_patch/patch_spyder_colors.py" "$ROOT/spyder/utils/stylesheet.py"
+  # croix de fermeture d'onglet a fond transparent au repos, comme les onglets que le patch
+  # precedent rend transparents. Cf. spyder_patch/patch_spyder_close_tab_transparent.py.
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_close_tab_transparent.py" "$ROOT/spyder/widgets/tabs.py"
   # affiche le chemin du fichier actif dans le titre de la fenetre ("Spyder - <chemin>") plutot que
   # dans la barre dediee au-dessus des onglets, masquee elle par l'option "editor/show_filename_toolbar"
   # de spyder.ini (demande explicite de l'utilisateur, 20/07/2026). Cf.
