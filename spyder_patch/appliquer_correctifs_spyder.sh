@@ -288,6 +288,10 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
   # du rouge (ICON_4). Cf. Commun/scripts_installation/spyder_patch/patch_spyder_breakpoint_color.py.
   python3 "$GEN_DIR/spyder_patch/patch_spyder_breakpoint_color.py" \
     "$ROOT/spyder/utils/icon_manager.py"
+  # Croix de fermeture (onglets, barre de recherche) plus fines : mdi.close -> ph.x-light.
+  # Cf. spyder_patch/patch_spyder_croix_fines.py.
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_croix_fines.py" \
+    "$ROOT/spyder/utils/icon_manager.py"
   # Erreurs de code signalees par un FOND ROUGE derriere le numero de ligne au lieu d'un cercle
   # barre d'une croix dans la marge. Cf. Commun/scripts_installation/spyder_patch/patch_spyder_error_margin.py.
   python3 "$GEN_DIR/spyder_patch/patch_spyder_error_margin.py" \
