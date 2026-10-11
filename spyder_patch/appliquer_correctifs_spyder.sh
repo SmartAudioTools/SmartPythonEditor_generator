@@ -317,6 +317,10 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
     "$ROOT/spyder/plugins/editor/widgets/base.py" \
     "$ROOT/spyder/plugins/editor/widgets/codeeditor/codeeditor.py" \
     "$ROOT/spyder/plugins/ipythonconsole/utils/style.py"
+  # Conge concave entre l'onglet actif et le cadre du volet (TabBar.paintEvent), aux couleurs
+  # de la regle smartos_focus. Apres patch_spyder_focus_volet. Cf. spyder_patch/patch_spyder_arrondi_onglet.py.
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_arrondi_onglet.py" \
+    "$ROOT/spyder/widgets/tabs.py"
   # Retire de la barre d'outils les boutons execution par cellules / selection-ligne (y compris
   # variantes debogueur/profileur), creation de cellule, Preferences et gestionnaire de PYTHONPATH
   # (l'execution du fichier reste). SUPPRIME reellement les boutons (retires de _item_map et
