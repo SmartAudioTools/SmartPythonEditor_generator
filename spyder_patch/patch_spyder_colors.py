@@ -158,11 +158,19 @@ TABS_PATCH = '''
         # l'onglet actif, au fond de l'editeur, recouvre le trait haut du cadre (1px partout
         # depuis le 11/10/2026 ; avec 2px, les onglets descendaient trop bas) ; la barre et les
         # autres onglets deviennent transparents et s'arretent 1px au-dessus. Le premier onglet
-        # perd 1px de la marge gauche de qdarkstyle (2px) et le coin haut-gauche du cadre
-        # devient droit : contour de l'onglet
-        # et cadre du volet sur la meme verticale (mesure en documentMode, celui des vrais volets).
+        # perd 1px de la marge gauche de qdarkstyle (2px) : contour de l'onglet et cadre du volet
+        # sur la meme verticale (mesure en documentMode, celui des vrais volets). Le coin
+        # haut-gauche du cadre devient droit, sinon son arrondi de 4px decroche sous le flanc du
+        # premier onglet ; en documentMode ce cadre n'est pas ::pane mais la bordure de la page
+        # (QAbstractScrollArea de qdarkstyle), d'ou la regle en cascade sur les pages. Le coin
+        # haut-droit aussi : un dernier onglet qui touche le bord droit du volet y descend ; et
+        # ::pane perd sa bordure droite (invisible, mais elle rentrait la page de 1px : le flanc
+        # de cet onglet tombait a cote du bord droit du cadre, mesure au banc le 12/10/2026).
         # padding-bottom compense le soulignement de 3px retire : texte au meme niveau.
-        css['QTabWidget::pane'].setValues(top='-1px', borderTopLeftRadius='0px')
+        css['QTabWidget::pane'].setValues(
+            top='-1px', borderTopLeftRadius='0px', borderRight='0px')
+        css['QAbstractScrollArea'].setValues(
+            borderTopLeftRadius='0px', borderTopRightRadius='0px')
         css[f'QTabBar{self.OBJECT_NAME}'].setValues(background='transparent')
         css[f'QTabBar{self.OBJECT_NAME}::tab'].setValues(
             marginBottom='1px', background='transparent', borderBottomColor='transparent')

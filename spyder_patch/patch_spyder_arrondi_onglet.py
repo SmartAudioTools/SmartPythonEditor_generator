@@ -26,6 +26,18 @@ CE QUI EST PATCHE (spyder/widgets/tabs.py, deux insertions, un marqueur)
     gauche de 5 px sur ::tab:first pour loger le conge du premier onglet, essayee dans le
     prototype : inutile depuis que ce conge-la est supprime.
 
+    Raccord au pixel (12/10/2026, « le countour des onglet et de fenetre ne coincide pas bien, les
+    arrondis externet non plus. ce n'est pas popre ») : l'arc est tangent au flanc (colonne
+    tabRect.left()+2 a gauche, marge de qdarkstyle ; tabRect.right() a droite) et au trait haut du
+    cadre (derniere ligne de la barre), centre sur le milieu des pixels de ces traits ; le fond de
+    l'onglet recouvre l'angle des deux traits, bouts compris, avant de tracer l'arc. Ecartes,
+    constates au banc : laisser les bouts de traits intacts (ils se croisent en angle droit et
+    cachent l'arc) ; un arc sur coordonnees entieres (bave sur deux pixels, trait flou) ; l'ancien
+    flanc gauche a tabRect.left() (conge decale de 1 a 2 px). Les coins du cadre sous un flanc sans
+    conge (premier onglet, onglet au bord droit) sont rendus carres et alignes par
+    patch_spyder_colors.py (QAbstractScrollArea, ::pane), pas ici.
+    Banc : outils/banc_arrondi_onglet.py (rend 1 sans ce patch ; aussi avec QT_SCALE_FACTOR=2).
+
     Points d'insertion localises par ast (la classe TabBar et la fin de son __init__), idempotent
     par marqueur, echec bruyant si la classe ou la methode manquent, fichier reparse avant ecriture.
 """
@@ -60,7 +72,14 @@ def _smartos_peindre_conges(barre, peintre):
     if focus:
         fond = fond.lighter(SMARTOS_ECLAIRCISSEMENT)
     rayon = SMARTOS_RAYON_CONGE
-    bas = barre.height()
+    # Le trait haut du cadre du volet est la derniere ligne de la barre (pane top:-1px) ; les
+    # flancs de l'onglet sont sur la colonne de sa bordure, decalee de la marge gauche de la
+    # feuille (2px de qdarkstyle ; le premier onglet n'a pas de conge gauche) ; aucune marge a
+    # droite. Un trait de 1px a son centre au milieu du pixel : l'arc part et arrive sur ces
+    # centres (+ 0.5), sinon il bave sur deux pixels au lieu de prolonger les traits nets.
+    ligne_cadre = barre.height() - 1
+    gauche = zone.left() + 2
+    droite = zone.right()
     parent = barre.parentWidget()
     touche_le_bord_droit = (
         parent is not None
@@ -70,18 +89,20 @@ def _smartos_peindre_conges(barre, peintre):
     for cote in (-1, 1):
         if (cote < 0 and i == 0) or (cote > 0 and touche_le_bord_droit):
             continue
-        # Carre rayon x rayon contre le flanc, au-dessus du cadre ; centre du disque au
-        # coin haut exterieur du carre : carre moins disque = l'interieur du conge.
-        x = zone.left() - rayon if cote < 0 else zone.right() + 1
-        centre_x = x if cote < 0 else x + rayon
-        carre = QPainterPath()
-        carre.addRect(QRectF(x, bas - rayon, rayon, rayon))
-        cercle = QRectF(centre_x - rayon, bas - 2 * rayon, 2 * rayon, 2 * rayon)
+        flanc = gauche if cote < 0 else droite
+        # Disque tangent au flanc et au trait du cadre, a l'exterieur de l'onglet : le fond de
+        # l'onglet recouvre le coin entre l'arc et ces deux traits, bouts de traits compris
+        # (sinon ils continuent tout droit et l'arc reste cache dans leur angle), puis l'arc.
+        centre_x = flanc + 0.5 + cote * rayon
+        centre_y = ligne_cadre + 0.5 - rayon
+        cercle = QRectF(centre_x - rayon, centre_y - rayon, 2 * rayon, 2 * rayon)
+        coin = QPainterPath()
+        coin.addRect(QRectF(centre_x if cote < 0 else flanc, centre_y,
+                            rayon + 0.5, rayon + 0.5))
         disque = QPainterPath()
         disque.addEllipse(cercle)
-        peintre.fillPath(carre.subtracted(disque), fond)
+        peintre.fillPath(coin.subtracted(disque), fond)
         peintre.drawArc(cercle, (270 if cote < 0 else 180) * 16, 90 * 16)
-
 
 '''
 
