@@ -13,7 +13,7 @@ sous la feuille d'application de Spyder. Pour chaque flanc de l'onglet actif, li
     patch_spyder_colors.py, l'arrondi de 4px du cadre de la page decroche vers l'interieur).
 Etats : onglet du milieu, deux conges ; premier onglet, pas de conge a gauche ; dernier onglet
 avec un volet reduit a la largeur des onglets, pas de conge a droite ; dernier onglet dans un
-volet large, conge a droite. Rend 0 si tout tient, 1 sinon.
+volet large, conge a droite ; onglet seul (:only-one), comme le premier. Rend 0 si tout tient, 1 sinon.
 Avec un chemin en argument, enregistre une capture agrandie (x6) de chaque etat, nommee
 <chemin>_<etat>.png.
 
@@ -146,4 +146,14 @@ touche = barre.mapTo(onglets, barre.tabRect(2).topRight()).x() + 1 >= onglets.wi
 verifier(touche and gauche and not droite,
          f"dernier onglet au bord droit du volet : conge a gauche seulement "
          f"(touche={touche}, {gauche}, {droite})")
+# Onglet seul (cas courant des consoles, de Claude, du Terminal) : Qt le classe :only-one et
+# non :first, et la regle de marge du premier onglet ne l'atteignait pas (flanc gauche 1px a
+# droite du cadre, signale par l'utilisateur le 12/10/2026).
+onglets.removeTab(2)
+onglets.removeTab(1)
+fenetre.resize(LARGE, 200)
+app.processEvents()
+gauche, droite = examiner(0, "seul")
+verifier(not gauche and droite,
+         f"onglet seul : pas de conge a gauche, conge a droite ({gauche}, {droite})")
 sys.exit(1 if echecs else 0)

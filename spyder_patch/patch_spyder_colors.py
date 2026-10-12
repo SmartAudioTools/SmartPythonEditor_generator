@@ -159,7 +159,9 @@ TABS_PATCH = '''
         # depuis le 11/10/2026 ; avec 2px, les onglets descendaient trop bas) ; la barre et les
         # autres onglets deviennent transparents et s'arretent 1px au-dessus. Le premier onglet
         # perd 1px de la marge gauche de qdarkstyle (2px) : contour de l'onglet et cadre du volet
-        # sur la meme verticale (mesure en documentMode, celui des vrais volets). Le coin
+        # sur la meme verticale (mesure en documentMode, celui des vrais volets). Un onglet seul
+        # est :only-one et non :first : sans lui, les volets a un seul onglet (console, Claude,
+        # Terminal) gardaient 1px de decalage (signale par l'utilisateur le 12/10/2026). Le coin
         # haut-gauche du cadre devient droit, sinon son arrondi de 4px decroche sous le flanc du
         # premier onglet ; en documentMode ce cadre n'est pas ::pane mais la bordure de la page
         # (QAbstractScrollArea de qdarkstyle), d'ou la regle en cascade sur les pages. Le coin
@@ -174,7 +176,8 @@ TABS_PATCH = '''
         css[f'QTabBar{self.OBJECT_NAME}'].setValues(background='transparent')
         css[f'QTabBar{self.OBJECT_NAME}::tab'].setValues(
             marginBottom='1px', background='transparent', borderBottomColor='transparent')
-        css[f'QTabBar{self.OBJECT_NAME}::tab:first'].setValues(marginLeft='1px')
+        for position in ['first', 'only-one']:  # un onglet seul n'est pas :first
+            css[f'QTabBar{self.OBJECT_NAME}::tab:{position}'].setValues(marginLeft='1px')
         for state in ['selected', 'selected:hover']:
             css[f'QTabBar{self.OBJECT_NAME}::tab:{state}'].setValues(
                 backgroundColor=smartos_editor_background(),
