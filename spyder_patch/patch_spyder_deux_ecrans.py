@@ -46,7 +46,7 @@ TROIS PIEGES, tous payes pendant la mesure :
 
 CE QUI S'EST CASSE A LA PREMIERE UTILISATION REELLE, le 31/07/2026, n'est PAS raconte ici : le
 recit complet - six defauts, ce qui a ete essaye puis ecarte, et la mesure de chacun - est dans
-CachyOS/Documentation/DONE/DONE - Spyder - cosmetique et disposition.txt, entree « Mode DEUX
+TODO/DONE/DONE - Spyder - cosmetique et disposition.txt, entree « Mode DEUX
 ECRANS ». Chaque contrainte qui en decoule est commentee A SON POINT D'USAGE dans le code
 ci-dessous, la ou elle risque d'etre defaite. Le recopier ici en ferait deux versions a maintenir,
 et la premiere a devenir fausse serait celle que personne ne relit.
