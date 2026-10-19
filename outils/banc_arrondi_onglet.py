@@ -13,7 +13,8 @@ sous la feuille d'application de Spyder. Pour chaque flanc de l'onglet actif, li
     patch_spyder_colors.py, l'arrondi de 4px du cadre de la page decroche vers l'interieur).
 Etats : onglet du milieu, deux conges ; premier onglet, pas de conge a gauche ; dernier onglet
 avec un volet reduit a la largeur des onglets, pas de conge a droite ; dernier onglet dans un
-volet large, conge a droite ; onglet seul (:only-one), comme le premier. Rend 0 si tout tient, 1 sinon.
+volet large, conge a droite ; onglet du milieu tire de 40 px (bouton tenu), deux conges a sa
+nouvelle place ; onglet seul (:only-one), comme le premier. Rend 0 si tout tient, 1 sinon.
 Avec un chemin en argument, enregistre une capture agrandie (x6) de chaque etat, nommee
 <chemin>_<etat>.png.
 
@@ -28,6 +29,8 @@ import sys
 import warnings
 
 warnings.filterwarnings("ignore")
+from qtpy.QtCore import QEvent, QPoint, QPointF, QRect, Qt  # noqa: E402
+from qtpy.QtGui import QMouseEvent  # noqa: E402
 from qtpy.QtWidgets import QApplication, QHBoxLayout, QWidget  # noqa: E402
 
 app = QApplication(sys.argv)
@@ -73,11 +76,24 @@ def ecart(a, b):
     return sum(abs(int(a[i:i + 2], 16) - int(b[i:i + 2], 16)) for i in (1, 3, 5))
 
 
-def examiner(index, etat):
-    """Active l'onglet `index` ; rend (conge a gauche, conge a droite) et verifie le raccord."""
+def souris(type_, point):
+    evenement = QMouseEvent(type_, QPointF(point), QPointF(barre.mapToGlobal(point)),
+                            Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
+    app.sendEvent(barre, evenement)
+    app.processEvents()
+
+
+def examiner(index, etat, glisser=0):
+    """Active l'onglet `index` ; rend (conge a gauche, conge a droite) et verifie le raccord.
+    Avec `glisser`, l'onglet est tire de ce nombre de pixels (bouton tenu) avant la capture."""
     onglets.setCurrentIndex(index)
     editeurs[index].setFocus()
     app.processEvents()
+    depart = barre.tabRect(index).center()
+    if glisser:
+        souris(QEvent.MouseButtonPress, depart)
+        for pas in range(5, glisser + 1, 5):  # Qt ne decolle l'onglet qu'apres quelques pixels
+            souris(QEvent.MouseMove, depart + QPoint(pas, 0))
     image = fenetre.grab().toImage()
     if prefixe:
         largeur, ratio = min(fenetre.width(), 300), image.devicePixelRatio()
@@ -93,6 +109,13 @@ def examiner(index, etat):
 
     zone = barre.tabRect(index)
     cadre = barre.height() - 1  # trait haut du cadre : derniere ligne de la barre
+    if glisser:
+        # Onglet tire : ses flancs sont lus sur la capture (contour a mi-hauteur), pas deduits
+        # de la geometrie de Qt, que le patch emploie justement.
+        flancs = [x for x in range(barre.width()) if pixel(x, cadre // 2) == BORD]
+        verifier(len(flancs) == 2 and flancs[0] > zone.left() + glisser // 2,
+                 f"{etat} : l'onglet tire suit la souris (flancs {flancs}, depart {zone.left()})")
+        zone = QRect(QPoint(flancs[0] - 2, 0), QPoint(flancs[-1], cadre))
     flancs = {'gauche': (zone.left() + (1 if index == 0 else 2), -1),
               'droite': (zone.right(), 1)}
     conges = {}
@@ -126,6 +149,8 @@ def examiner(index, etat):
             bord = [pixel(flanc, cadre + d) for d in range(1, 6)]
             verifier(set(bord) == {BORD},
                      f"{etat} : le flanc {cote} se prolonge tout droit dans le cadre ({bord})")
+    if glisser:
+        souris(QEvent.MouseButtonRelease, depart + QPoint(glisser, 0))
     return conges['gauche'], conges['droite']
 
 
@@ -146,12 +171,20 @@ touche = barre.mapTo(onglets, barre.tabRect(2).topRight()).x() + 1 >= onglets.wi
 verifier(touche and gauche and not droite,
          f"dernier onglet au bord droit du volet : conge a gauche seulement "
          f"(touche={touche}, {gauche}, {droite})")
+# Onglet tire (setMovable, comme le dock Claude en vue onglets) : Qt le peint dans un widget
+# enfant qui suit la souris, tabRect reste en place ; le conge doit suivre (« lors du deplacement
+# d'onglet, l'arrondi exterieur ne suit pas », 19/10/2026).
+fenetre.resize(LARGE, 200)
+app.processEvents()
+onglets.setMovable(True)
+gauche, droite = examiner(1, "glisser", glisser=40)
+verifier(gauche and droite, f"onglet tire de 40 px : conge des deux cotes ({gauche}, {droite})")
+onglets.setMovable(False)
 # Onglet seul (cas courant des consoles, de Claude, du Terminal) : Qt le classe :only-one et
 # non :first, et la regle de marge du premier onglet ne l'atteignait pas (flanc gauche 1px a
 # droite du cadre, signale par l'utilisateur le 12/10/2026).
 onglets.removeTab(2)
 onglets.removeTab(1)
-fenetre.resize(LARGE, 200)
 app.processEvents()
 gauche, droite = examiner(0, "seul")
 verifier(not gauche and droite,

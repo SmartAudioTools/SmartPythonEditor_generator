@@ -36,6 +36,16 @@ CE QUI EST PATCHE (spyder/widgets/tabs.py, deux insertions, un marqueur)
     flanc gauche a tabRect.left() (conge decale de 1 a 2 px). Les coins du cadre sous un flanc sans
     conge (premier onglet, onglet au bord droit) sont rendus carres et alignes par
     patch_spyder_colors.py (QAbstractScrollArea, ::pane), pas ici.
+    Onglet tire (19/10/2026, « lors du deplacement d'onglet, l'arrondi exterieur ne suit pas »,
+    barres setMovable : dock Claude en vue onglets) : pendant le glisser, Qt peint l'onglet dans
+    un widget enfant prive (QMovableTabWidget) qui suit la souris, et tabRect reste a l'ancienne
+    place - le conge y restait. Le conge prend la geometrie de ce widget (moins
+    PM_TabBarTabOverlap de chaque cote ; Qt 5 y peint l'onglet en OnlyOneTab, marge gauche 1px).
+    Peint APRES la barre, ce widget recouvrait aussi le pied des arcs de ses flancs droits : un
+    masque lui retire, sous le depart des arcs, la bande exterieure a chaque flanc dote d'un conge.
+    Ecartes : suivre la souris soi-meme (mousePress/MoveEvent) - Qt borne et anime le deplacement,
+    on recopierait sa logique ; lire le dragOffset de Qt - prive, inaccessible depuis Python ;
+    faire peindre le conge par ce widget - il n'a pas de classe Python a surcharger.
     Banc : outils/banc_arrondi_onglet.py (rend 1 sans ce patch ; aussi avec QT_SCALE_FACTOR=2).
 
     Points d'insertion localises par ast (la classe TabBar et la fin de son __init__), idempotent
@@ -51,12 +61,27 @@ BLOC_MODULE = '''\
 # Conge concave au pied de l'onglet actif (ajout SmartOS, cf.
 # patch_spyder_arrondi_onglet.py) : peint par TabBar.paintEvent APRES celui de QTabBar,
 # dans la bande sous les onglets, avec les couleurs de PanesTabBarStyleSheet.
+from qtpy import QT5
 from qtpy.QtCore import QRectF
-from qtpy.QtGui import QColor, QPainter, QPainterPath, QPen
+from qtpy.QtGui import QColor, QPainter, QPainterPath, QPen, QRegion
+from qtpy.QtWidgets import QStyle
 from spyder.utils.stylesheet import (
     SMARTOS_ECLAIRCISSEMENT, smartos_editor_background)
 
 SMARTOS_RAYON_CONGE = 5
+
+
+def _smartos_onglet_tire(barre):
+    # Pendant un glisser (setMovable), Qt peint l'onglet tire dans un widget enfant prive
+    # (QMovableTabWidget, sans meta-objet propre : classe 'QWidget') qui suit la souris,
+    # tandis que tabRect reste a la place d'origine. Rend ce widget, ou None hors glisser.
+    # Les boutons d'onglet ont leur propre classe (CloseButton de Qt, CoinDOnglet du greffon
+    # Claude). QWidget : deja importe en tete de tabs.py.
+    for enfant in barre.children():
+        if (isinstance(enfant, QWidget) and enfant.isVisible()
+                and enfant.metaObject().className() == 'QWidget'):
+            return enfant
+    return None
 
 
 def _smartos_peindre_conges(barre, peintre):
@@ -65,6 +90,19 @@ def _smartos_peindre_conges(barre, peintre):
     if i < 0:
         return
     zone = barre.tabRect(i)
+    # Flanc gauche sur la colonne de la bordure de l'onglet, decalee de la marge gauche de la
+    # feuille (2px de qdarkstyle ; le premier onglet n'a pas de conge gauche).
+    marge = 2
+    tire = _smartos_onglet_tire(barre)
+    if tire is not None:
+        # L'onglet tire est l'onglet actif (la pression le selectionne). Qt le peint dans son
+        # widget avec PM_TabBarTabOverlap de jeu de chaque cote, a la largeur qu'il avait a la
+        # pression (tabRect peut changer ensuite) ; Qt 5 le peint en OnlyOneTab, donc avec la
+        # marge 1px de ::tab:only-one (patch_spyder_colors.py). Mesure au banc, Qt 5 et 6.
+        jeu = barre.style().pixelMetric(QStyle.PM_TabBarTabOverlap, None, barre)
+        zone = tire.geometry().adjusted(jeu, 0, -jeu, 0)
+        if QT5:
+            marge = 1
     focus = bool(barre.property('smartos_focus'))
     bord = QColor(SpyderPalette.COLOR_ACCENT_3 if focus
                   else SpyderPalette.COLOR_BACKGROUND_4)
@@ -72,23 +110,35 @@ def _smartos_peindre_conges(barre, peintre):
     if focus:
         fond = fond.lighter(SMARTOS_ECLAIRCISSEMENT)
     rayon = SMARTOS_RAYON_CONGE
-    # Le trait haut du cadre du volet est la derniere ligne de la barre (pane top:-1px) ; les
-    # flancs de l'onglet sont sur la colonne de sa bordure, decalee de la marge gauche de la
-    # feuille (2px de qdarkstyle ; le premier onglet n'a pas de conge gauche) ; aucune marge a
-    # droite. Un trait de 1px a son centre au milieu du pixel : l'arc part et arrive sur ces
-    # centres (+ 0.5), sinon il bave sur deux pixels au lieu de prolonger les traits nets.
+    # Le trait haut du cadre du volet est la derniere ligne de la barre (pane top:-1px) ; le
+    # flanc droit est sur la derniere colonne de l'onglet, aucune marge a droite. Un
+    # trait de 1px a son centre au milieu du pixel : l'arc part et arrive sur ces centres
+    # (+ 0.5), sinon il bave sur deux pixels au lieu de prolonger les traits nets.
     ligne_cadre = barre.height() - 1
-    gauche = zone.left() + 2
+    gauche = zone.left() + marge
     droite = zone.right()
     parent = barre.parentWidget()
     touche_le_bord_droit = (
         parent is not None
         and barre.mapTo(parent, zone.topRight()).x() + 1 >= parent.width())
+    cotes = [cote for cote in (-1, 1)
+             if not ((cote < 0 and i == 0) or (cote > 0 and touche_le_bord_droit))]
+    if tire is not None:
+        # Le widget de l'onglet tire est peint APRES la barre : ses flancs descendraient tout
+        # droit sur le pied des conges. On lui retire, sous le depart des arcs, la bande qui va
+        # de son bord a chaque flanc dote d'un conge (flanc compris) : la barre y peint seule.
+        haut = ligne_cadre - rayon + 1 - tire.y()
+        masque = QRegion(tire.rect())
+        for cote in cotes:
+            x = (gauche if cote < 0 else droite) - tire.x()
+            masque -= QRegion(0 if cote < 0 else x, haut,
+                              x + 1 if cote < 0 else tire.width() - x, tire.height())
+        # setMask repeint la barre : sans ce test, chaque paintEvent en relance un (mesure).
+        if masque != tire.mask():
+            tire.setMask(masque)
     peintre.setRenderHint(QPainter.Antialiasing)
     peintre.setPen(QPen(bord, 1))
-    for cote in (-1, 1):
-        if (cote < 0 and i == 0) or (cote > 0 and touche_le_bord_droit):
-            continue
+    for cote in cotes:
         flanc = gauche if cote < 0 else droite
         # Disque tangent au flanc et au trait du cadre, a l'exterieur de l'onglet : le fond de
         # l'onglet recouvre le coin entre l'arc et ces deux traits, bouts de traits compris
