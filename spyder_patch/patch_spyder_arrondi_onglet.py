@@ -46,6 +46,13 @@ CE QUI EST PATCHE (spyder/widgets/tabs.py, deux insertions, un marqueur)
     Ecartes : suivre la souris soi-meme (mousePress/MoveEvent) - Qt borne et anime le deplacement,
     on recopierait sa logique ; lire le dragOffset de Qt - prive, inaccessible depuis Python ;
     faire peindre le conge par ce widget - il n'a pas de classe Python a surcharger.
+    Onglet teint (24/10/2026, « l'onglet doit etre legerement eclairci de la meme maniere que
+    la fenetre quand c'est l'onglet actif, quelle que soit la couleur de fond (defaut, rouge,
+    vert) ») : le greffon Claude peint la couleur d'etat de sa session sur le fond de l'onglet,
+    et le conge restait au fond de l'editeur. La propriete dynamique 'smartos_fond_onglet' de
+    la barre, posee par qui teint, donne la couleur du conge ; l'eclaircissement au focus reste
+    fait ici. Ecarte : repeindre le conge depuis le greffon apres sa teinte - l'arc, trace deux
+    fois en anticrenele, s'epaissit.
     Banc : outils/banc_arrondi_onglet.py (rend 1 sans ce patch ; aussi avec QT_SCALE_FACTOR=2).
 
     Points d'insertion localises par ast (la classe TabBar et la fin de son __init__), idempotent
@@ -106,7 +113,9 @@ def _smartos_peindre_conges(barre, peintre):
     focus = bool(barre.property('smartos_focus'))
     bord = QColor(SpyderPalette.COLOR_ACCENT_3 if focus
                   else SpyderPalette.COLOR_BACKGROUND_4)
-    fond = QColor(smartos_editor_background())
+    # Un greffon qui teint ses onglets (couleur d'etat du greffon Claude) pose la teinte de
+    # l'onglet actif, NON eclaircie, dans cette propriete : le conge prolonge l'onglet.
+    fond = QColor(barre.property('smartos_fond_onglet') or smartos_editor_background())
     if focus:
         fond = fond.lighter(SMARTOS_ECLAIRCISSEMENT)
     rayon = SMARTOS_RAYON_CONGE
