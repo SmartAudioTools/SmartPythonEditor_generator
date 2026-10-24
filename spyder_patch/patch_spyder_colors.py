@@ -217,6 +217,21 @@ TABS_FOCUS_PATCH = '''
             )
 '''
 
+TABS_HOVER_MARKER = "# Onglet survole eclairci, sans contour bleu"
+TABS_HOVER_PATCH = '''
+        # Onglet survole eclairci, sans contour bleu (ajout SmartOS, cf. patch_spyder_colors.py).
+        # Demande de l'utilisateur, 24/10/2026 : « quand un onglet est survole, son contour prend
+        # le meme bleu que l'onglet qui a le focus. On ne peut pas juste se contenter de
+        # l'eclaircissement du fond ? » Le bleu venait de qdarkstyle (::tab:top:!selected:hover).
+        # Le contour devient transparent plutot que nul : memes largeurs, l'onglet ne bouge pas.
+        from qtpy.QtGui import QColor
+        css[f'QTabBar{self.OBJECT_NAME}::tab:!selected:hover'].setValues(
+            borderColor='transparent',
+            backgroundColor=QColor(smartos_editor_background()).lighter(
+                SMARTOS_ECLAIRCISSEMENT).name(),
+        )
+'''
+
 
 def find_method(tree, class_name, method_name):
     """Retourne le noeud AST de <class_name>.<method_name>, ou None."""
@@ -250,6 +265,7 @@ def main():
         ('PanesTabBarStyleSheet', 'set_stylesheet', TABS_MARKER, TABS_PATCH),
         ('AppStylesheet', '_customize_stylesheet', VIEWS_FOCUS_MARKER, VIEWS_FOCUS_PATCH),
         ('PanesTabBarStyleSheet', 'set_stylesheet', TABS_FOCUS_MARKER, TABS_FOCUS_PATCH),
+        ('PanesTabBarStyleSheet', 'set_stylesheet', TABS_HOVER_MARKER, TABS_HOVER_PATCH),
     ]
 
     # (numero de ligne apres laquelle inserer, texte a inserer). Insertions appliquees de la
@@ -307,7 +323,8 @@ def main():
 
     print("Patch couleurs Spyder applique (barre d'outils, separateurs de docks et barre de statut "
           "alignes sur le fond de l'editeur, barres de defilement sans fleches, onglet actif "
-          "ouvert sur son volet, volet qui a le focus eclairci et onglet actif en bleu).")
+          "ouvert sur son volet, volet qui a le focus eclairci, onglet actif en bleu et onglet "
+          "survole eclairci).")
     return 0
 
 
