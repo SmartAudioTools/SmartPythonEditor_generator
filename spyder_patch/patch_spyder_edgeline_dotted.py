@@ -10,7 +10,8 @@ CE QUI EST PATCHE
     spyder/plugins/editor/panels/edgeline.py, methode EdgeLine.paintEvent. Elle trace la ligne
     avec un stylo plein a la couleur des commentaires. On remplace le stylo par un QPen
     COSMETIQUE (largeur en pixels physiques -> toujours 1 px net, meme sous mise a l'echelle
-    fractionnaire KDE) et POINTILLE (motif [6, 2]), et la couleur par
+    fractionnaire KDE) et POINTILLE (motif [12, 12], de grands pointilles : [6, 2] se lisait comme
+    un trait plein, [1, 3] trop petit, [6, 6] pas assez grand - 31/10/2026), et la couleur par
     le fond de l'editeur a peine eclairci (10 %) - meme teinte que le trait de demarcation du
     greffon, pour la coherence. Les colonnes sont inchangees.
 
@@ -48,7 +49,7 @@ BLOC = (
     "        # trait de demarcation, pour la coherence.\n"
     "        # ⚠ setCosmetic(True) : la largeur d'un stylo cosmetique est en pixels PHYSIQUES,\n"
     "        # donc le trait fait toujours pile 1 px net quel que soit le facteur d'echelle KDE\n"
-    "        # (fractionnaire compris). Motif [6, 2].\n"
+    "        # (fractionnaire compris). Motif [12, 12] : de grands pointilles.\n"
     "        _base = self.editor.palette().base().color()\n"
     "        color = QColor(round(_base.red() * 0.9 + 25.5),\n"
     "                       round(_base.green() * 0.9 + 25.5),\n"
@@ -56,7 +57,7 @@ BLOC = (
     "        pen = QPen(color)\n"
     "        pen.setWidth(1)\n"
     "        pen.setCosmetic(True)\n"
-    "        pen.setDashPattern([6, 2])\n"
+    "        pen.setDashPattern([12, 12])\n"
     "        painter.setPen(pen)\n"
 )
 

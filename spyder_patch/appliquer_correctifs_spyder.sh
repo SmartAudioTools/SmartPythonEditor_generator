@@ -296,6 +296,11 @@ GEN_DIR="${2:?Usage: appliquer_correctifs_spyder.sh <ROOT> <GEN_DIR>}"
   # barre d'une croix dans la marge. Cf. Commun/scripts_installation/spyder_patch/patch_spyder_error_margin.py.
   python3 "$GEN_DIR/spyder_patch/patch_spyder_error_margin.py" \
     "$ROOT/spyder/plugins/editor/panels/linenumber.py"
+  # Carte des erreurs dessinee DANS la barre de defilement verticale (toujours affichee) au lieu
+  # d'une bande de 12 px a sa gauche, prise pour une seconde barre. Cf.
+  # spyder_patch/patch_spyder_carte_dans_barre.py.
+  python3 "$GEN_DIR/spyder_patch/patch_spyder_carte_dans_barre.py" \
+    "$ROOT/spyder/plugins/editor/panels/scrollflag.py"
   # Zone d'infos par panneau d'edition : overlay FLOTTANT (ligne/colonne + encodage + fin de ligne)
   # en bas a droite de chaque editeur, verbeux en francais (via le catalogue de traduction), avec
   # fond ROUGE si l'encodage n'est pas compatible UTF-8 ou si la fin de ligne est Windows (alerte

@@ -1,0 +1,20 @@
+DOUTE 3 (relecture du 05/10) - hidePopup qui saute setStyleSheet si la feuille est identique
+(worker ec, 05/10/2026 ~10:25, apres « banc libre » de 03). Niveau de preuve : MESURE, banc hors ecran.
+
+Banc : scratchpad ec banc2/liste_popup.py, lance depuis bed/ref (amont) et bed/vierge2 (v6.1.5 +
+chaine complete), HOME/XDG_CONFIG_HOME jetables, QT_QPA_PLATFORM=offscreen, APP_STYLESHEET posee
+sur l'application. Trois listes : SpyderComboBox simple, editable, SpyderComboBoxWithIcons.
+Sequence : affichee -> showPopup -> hidePopup -> showPopup -> hidePopup ; a chaque etape
+styleSheet() et grab() en PNG. spyder.__file__ verifie dans chaque arbre.
+
+RESULTATS
+- Feuilles : identiques ref/vierge2 a toutes les etapes SAUF « affichee » (attendu : le correctif
+  pose la feuille fermee des le constructeur, 375 car. avec radius 4px ; l'amont n'a encore que
+  302 car., sans rayon). Ouverte : radius 0px des deux cotes.
+- Captures : PNG identiques ref/vierge2 aux 15 etapes (3 listes x 5).
+- Sensibilite du banc : ouverte vs fermee differe de 638 a 659 pixels dans chaque arbre -> la
+  capture VOIT bien le changement de coins ; fermee == affichee (pixels) dans les deux arbres.
+
+VERDICT : doute leve. Apres fermeture (1re et 2e), la liste retrouve feuille et coins arrondis
+exactement comme en amont ; sauter le setStyleSheet redondant ne laisse aucune trace visible.
+Limite : rendu offscreen (style Fusion du plugin offscreen), pas d'interaction souris reelle.

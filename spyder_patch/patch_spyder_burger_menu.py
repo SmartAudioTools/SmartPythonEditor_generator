@@ -283,14 +283,25 @@ NEW_METHODS = '''    def _build_burger_menu(self):
         _journaliser('demarrage', date=time.strftime('%Y-%m-%d %H:%M:%S'),
                      mode_deux_ecrans=_mode)
 
+        # Une barre dont TOUS les boutons ont ete masques (Fenetre > Boutons des barres d'outils)
+        # reste isVisible() mais sort de la rangee : Qt la pose hors champ, en coordonnees
+        # negatives, sans lui reserver de place. La compter faussait le centrage (le groupe ne
+        # bougeait pas quand on vidait Executer, mesure hors ecran du 30/10/2026) et pouvait en
+        # faire l'ancre de _place_left. Releve utilisateur du 30/10/2026 : « quand j'enleve des
+        # boutons de la barre d'outils, il faut recentrer les outils qui etaient centres ».
+        def _dans_la_rangee(tb):
+            return (tb.isVisible()
+                    and main.toolBarArea(tb) == Qt.TopToolBarArea
+                    and any(a.isVisible() and not a.isSeparator()
+                            for a in tb.actions()))
+
         def _recenter():
             if toolbar_plugin is None:
                 return
             epingles = _epingles_a_gauche()
             group_w = pinned = 0
             for tb in toolbar_plugin.toolbarslist:
-                if not (tb.isVisible()
-                        and main.toolBarArea(tb) == Qt.TopToolBarArea):
+                if not _dans_la_rangee(tb):
                     continue
                 on = tb.objectName()
                 if on == 'window_controls_toolbar':
@@ -340,8 +351,7 @@ NEW_METHODS = '''    def _build_burger_menu(self):
                 pass
             epingles = _epingles_a_gauche()
             cands = [tb for tb in toolbar_plugin.toolbarslist
-                     if tb.isVisible()
-                     and main.toolBarArea(tb) == Qt.TopToolBarArea
+                     if _dans_la_rangee(tb)
                      and tb.objectName() != 'window_controls_toolbar'
                      and tb.objectName() not in epingles]
             positions = [tb.mapTo(main, QPoint(0, 0)) for tb in cands]

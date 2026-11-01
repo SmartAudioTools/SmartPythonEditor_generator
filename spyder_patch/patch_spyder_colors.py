@@ -113,22 +113,22 @@ STATUSBAR_PATCH = '''
 # virgule de QDarkStyle ("...:hover, ...:on") en regles separees, d'ou les trois variantes : sans
 # elles, le triangle reapparaitrait au survol. Mesure hors ecran sur une QScrollBar de 300 px :
 # sous-controles add/sub ramenes a 0x0, gouttiere de 266 a 294 px. Le contour de la gouttiere
-# (#455364 chez QDarkStyle) est rendu a demi transparent (demande du 11/10/2026).
+# (#455364 chez QDarkStyle), rendu a demi transparent le 11/10/2026, est retire le 31/10/2026.
 SCROLLBAR_MARKER = "# Barres de defilement sans fleches"
 SCROLLBAR_PATCH = '''
         # Barres de defilement sans fleches (ajout SmartOS, cf. patch_spyder_colors.py) : la
         # gouttiere occupe toute la longueur, la marge de 16 px reservee aux fleches disparait.
-        # Son contour est le gris de QDarkStyle a demi transparent (#2F3B48 sur le fond spyder/dark) :
-        # 1px de feuille de style vaut 2 pixels reels sur un ecran a l'echelle 2, plus fin est
-        # impossible ; la transparence l'estompe en suivant la couleur du fond, quelle qu'elle soit.
-        gris = SpyderPalette.COLOR_BACKGROUND_4.lstrip('#')
-        smartos_contour = 'rgba({}, {}, {}, 50%)'.format(
-            *(int(gris[k:k + 2], 16) for k in (0, 2, 4))
-        )
+        # Gouttiere SANS contour (« peux-tu enlever les contours de toutes les barres de
+        # defilement », l'utilisateur, 31/10/2026 ; il etait a demi transparent depuis le 11/10).
+        # Gouttiere TRANSPARENTE (meme jour : « il faut aussi que le fond des barres de
+        # defilement s'eclaircisse comme le fond des fenetres quand elles ont le focus. tu ne
+        # peux pas juste mettre le fond transparent ? ») : on y voit le fond du widget qui la
+        # porte, eclairci au focus (banc du 31/10 : editeur et vues, gouttiere = fond de la vue).
         # Curseur sans contour, et barre affinee de 16 a 12px (curseur de 6px).
         for orientation, epaisseur in (('vertical', 'width'), ('horizontal', 'height')):
             css[f'QScrollBar:{orientation}'].setValues(
-                margin='2px', border=f'1px solid {smartos_contour}', **{epaisseur: '12px'}
+                margin='2px', border='0px', backgroundColor='transparent',
+                **{epaisseur: '12px'}
             )
             for etat in ('', ':hover', ':focus'):
                 css[f'QScrollBar::handle:{orientation}{etat}'].setValues(border='0px')
@@ -137,6 +137,14 @@ SCROLLBAR_PATCH = '''
                     css[f'QScrollBar::{ligne}:{orientation}{etat}'].setValues(
                         width='0px', height='0px', margin='0px'
                     )
+        # Conteneurs des barres transparents eux aussi : la regle QWidget de QDarkStyle leur donne
+        # un fond opaque #19232D, que la gouttiere transparente laissait voir dans l'editeur et la
+        # console IPython (constat de l'utilisateur le 31/10/2026). Qt les nomme ainsi
+        # (QAbstractScrollAreaScrollBarContainer). Banc du meme jour, vrai CodeEditor et vraie
+        # console qtconsole : gouttiere = fond eclairci au focus, #19232D sans la regle.
+        # Selecteur [objectName=...] et non #nom : qstylizer change les _ d'un #nom en -.
+        for conteneur in ('qt_scrollarea_vcontainer', 'qt_scrollarea_hcontainer'):
+            css.QWidget[f'[objectName="{conteneur}"]'].setValues(backgroundColor='transparent')
 '''
 
 # Ajoute a la fin de ApplicationToolbarStylesheet.set_stylesheet, apres le
