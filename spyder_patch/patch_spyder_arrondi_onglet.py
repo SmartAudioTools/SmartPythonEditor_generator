@@ -33,9 +33,18 @@ CE QUI EST PATCHE (spyder/widgets/tabs.py, deux insertions, un marqueur)
     l'onglet recouvre l'angle des deux traits, bouts compris, avant de tracer l'arc. Ecartes,
     constates au banc : laisser les bouts de traits intacts (ils se croisent en angle droit et
     cachent l'arc) ; un arc sur coordonnees entieres (bave sur deux pixels, trait flou) ; l'ancien
-    flanc gauche a tabRect.left() (conge decale de 1 a 2 px). Les coins du cadre sous un flanc sans
-    conge (premier onglet, onglet au bord droit) sont rendus carres et alignes par
-    patch_spyder_colors.py (QAbstractScrollArea, ::pane), pas ici.
+    flanc gauche a tabRect.left() (conge decale de 1 a 2 px).
+    Coins hauts du cadre (01/11/2026, « le contour de l'editeur n'a pas les coins haut-gauche et
+    haut-droit arrondis. la console IPython pareil ») : ils etaient rendus carres partout par
+    patch_spyder_colors.py. Ils ne le sont plus que sous un flanc sans conge (premier onglet actif
+    pour le coin gauche, onglet actif au bord droit pour le droit), ou le flanc descend droit et
+    un arrondi de 4 px decrocherait ; ailleurs ils restent arrondis. Le choix est fait ICI, apres
+    chaque peinture de la barre (_smartos_coins_du_cadre) : proprietes smartos_coin_gauche /
+    smartos_coin_droit posees sur la page courante et ses QAbstractScrollArea (le vrai cadre en
+    documentMode), repolies au tour suivant de la boucle, seulement quand elles changent ; la
+    feuille de patch_spyder_colors.py met le rayon a 0 selon ces proprietes. Ecarte : choisir
+    dans la feuille seule - elle ne sait pas quel onglet est actif ni s'il touche le bord.
+    Consequence voulue : un volet a onglet unique (console IPython) garde son coin gauche carre.
     Onglet tire (19/10/2026, « lors du deplacement d'onglet, l'arrondi exterieur ne suit pas »,
     barres setMovable : dock Claude en vue onglets) : pendant le glisser, Qt peint l'onglet dans
     un widget enfant prive (QMovableTabWidget) qui suit la souris, et tabRect reste a l'ancienne
@@ -69,9 +78,9 @@ BLOC_MODULE = '''\
 # patch_spyder_arrondi_onglet.py) : peint par TabBar.paintEvent APRES celui de QTabBar,
 # dans la bande sous les onglets, avec les couleurs de PanesTabBarStyleSheet.
 from qtpy import QT5
-from qtpy.QtCore import QRectF
+from qtpy.QtCore import QRectF, QTimer
 from qtpy.QtGui import QColor, QPainter, QPainterPath, QPen, QRegion
-from qtpy.QtWidgets import QStyle
+from qtpy.QtWidgets import QAbstractScrollArea, QStyle
 from spyder.utils.stylesheet import (
     SMARTOS_ECLAIRCISSEMENT, smartos_editor_background)
 
@@ -89,6 +98,52 @@ def _smartos_onglet_tire(barre):
                 and enfant.metaObject().className() == 'QWidget'):
             return enfant
     return None
+
+
+def _smartos_touche_le_bord_droit(barre, zone):
+    # Bord droit de l'onglet sur celui du QTabWidget (coordonnees du parent de la barre).
+    parent = barre.parentWidget()
+    return (parent is not None
+            and barre.mapTo(parent, zone.topRight()).x() + 1 >= parent.width())
+
+
+def _smartos_coins_du_cadre(barre):
+    # Coins hauts du cadre de la page courante : carres sous un flanc SANS conge (premier
+    # onglet a gauche, onglet au bord droit a droite), ou le flanc descend tout droit dans le
+    # bord ; arrondis partout ailleurs. Proprietes dynamiques posees sur les
+    # QAbstractScrollArea de la page (son cadre en documentMode), lues par la feuille de
+    # PanesTabBarStyleSheet (patch_spyder_colors.py). Appele depuis paintEvent, qui suit
+    # changement d'onglet, deplacement et redimensionnement ; le repolissage est differe d'un
+    # tour de boucle (jamais pendant une peinture) et n'a lieu que si une valeur change.
+    parent = barre.parentWidget()
+    i = barre.currentIndex()
+    if not isinstance(parent, QTabWidget) or i < 0:
+        return
+    page = parent.currentWidget()
+    if page is None:
+        return
+    voulu = (i == 0, _smartos_touche_le_bord_droit(barre, barre.tabRect(i)))
+    if (bool(page.property('smartos_coin_gauche')),
+            bool(page.property('smartos_coin_droit'))) == voulu:
+        return
+
+    def appliquer():
+        try:
+            cadres = [page] + page.findChildren(QAbstractScrollArea)
+        except RuntimeError:
+            return  # page detruite entre-temps
+        for cadre in cadres:
+            cadre.setProperty('smartos_coin_gauche', voulu[0])
+            cadre.setProperty('smartos_coin_droit', voulu[1])
+            if isinstance(cadre, QAbstractScrollArea):
+                cadre.style().unpolish(cadre)
+                cadre.style().polish(cadre)
+                cadre.update()
+
+    # La page porte la valeur des maintenant : les peintures suivantes ne relancent rien.
+    page.setProperty('smartos_coin_gauche', voulu[0])
+    page.setProperty('smartos_coin_droit', voulu[1])
+    QTimer.singleShot(0, appliquer)
 
 
 def _smartos_peindre_conges(barre, peintre):
@@ -126,12 +181,9 @@ def _smartos_peindre_conges(barre, peintre):
     ligne_cadre = barre.height() - 1
     gauche = zone.left() + marge
     droite = zone.right()
-    parent = barre.parentWidget()
-    touche_le_bord_droit = (
-        parent is not None
-        and barre.mapTo(parent, zone.topRight()).x() + 1 >= parent.width())
     cotes = [cote for cote in (-1, 1)
-             if not ((cote < 0 and i == 0) or (cote > 0 and touche_le_bord_droit))]
+             if not ((cote < 0 and i == 0)
+                     or (cote > 0 and _smartos_touche_le_bord_droit(barre, zone)))]
     if tire is not None:
         # Le widget de l'onglet tire est peint APRES la barre : ses flancs descendraient tout
         # droit sur le pied des conges. On lui retire, sous le depart des arcs, la bande qui va
@@ -173,6 +225,8 @@ BLOC_METHODE = '''\
         peintre = QPainter(self)
         _smartos_peindre_conges(self, peintre)
         peintre.end()
+        # Coins hauts du cadre de la page : arrondis sauf sous un flanc sans conge.
+        _smartos_coins_du_cadre(self)
 '''
 
 

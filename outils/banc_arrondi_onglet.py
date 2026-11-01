@@ -13,7 +13,8 @@ sous la feuille d'application de Spyder. Pour chaque flanc de l'onglet actif, li
     patch_spyder_colors.py, l'arrondi de 4px du cadre de la page decroche vers l'interieur).
 Etats : onglet du milieu, deux conges ; premier onglet, pas de conge a gauche ; dernier onglet
 avec un volet reduit a la largeur des onglets, pas de conge a droite ; dernier onglet dans un
-volet large, conge a droite ; onglet du milieu tire de 40 px (bouton tenu), deux conges a sa
+volet large, conge a droite ; dans chaque etat (hors glisser), coins hauts du cadre de la
+page carres sous un flanc sans conge et arrondis ailleurs ; onglet du milieu tire de 40 px (bouton tenu), deux conges a sa
 nouvelle place ; onglet seul (:only-one), comme le premier. Rend 0 si tout tient, 1 sinon.
 Avec un chemin en argument, enregistre une capture agrandie (x6) de chaque etat, nommee
 <chemin>_<etat>.png.
@@ -89,6 +90,7 @@ def examiner(index, etat, glisser=0):
     onglets.setCurrentIndex(index)
     editeurs[index].setFocus()
     app.processEvents()
+    app.processEvents()  # coins du cadre : repolissage differe d'un tour par la barre
     depart = barre.tabRect(index).center()
     if glisser:
         souris(QEvent.MouseButtonPress, depart)
@@ -149,6 +151,20 @@ def examiner(index, etat, glisser=0):
             bord = [pixel(flanc, cadre + d) for d in range(1, 6)]
             verifier(set(bord) == {BORD},
                      f"{etat} : le flanc {cote} se prolonge tout droit dans le cadre ({bord})")
+    # Coins hauts du cadre de la page : carres sous un flanc sans conge, arrondis ailleurs
+    # (« le contour de l'editeur n'a pas les coins haut-gauche et haut-droit arrondis »,
+    # 01/11/2026). Le pixel d'angle exact est sur le bord si le coin est carre, hors de l'arc
+    # (fond) s'il est arrondi. Pas pendant un glisser : la page ne change pas.
+    if not glisser:
+        page = onglets.currentWidget()
+        haut_gauche = page.mapTo(fenetre, QPoint(0, 0))
+        for cote, x in (('gauche', haut_gauche.x()),
+                        ('droite', haut_gauche.x() + page.width() - 1)):
+            couleur = image.pixelColor(round(x * ratio), round(haut_gauche.y() * ratio)).name()
+            carre = ecart(couleur, BORD) < 60
+            verifier(carre == (not conges[cote]),
+                     f"{etat} : coin haut-{cote} du cadre {'carre' if carre else 'arrondi'} "
+                     f"({couleur}), attendu {'arrondi' if conges[cote] else 'carre'}")
     if glisser:
         souris(QEvent.MouseButtonRelease, depart + QPoint(glisser, 0))
     return conges['gauche'], conges['droite']

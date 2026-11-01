@@ -162,17 +162,22 @@ TABS_PATCH = '''
         # sur la meme verticale (mesure en documentMode, celui des vrais volets). Un onglet seul
         # est :only-one et non :first : sans lui, les volets a un seul onglet (console, Claude,
         # Terminal) gardaient 1px de decalage (signale par l'utilisateur le 12/10/2026). Le coin
-        # haut-gauche du cadre devient droit, sinon son arrondi de 4px decroche sous le flanc du
-        # premier onglet ; en documentMode ce cadre n'est pas ::pane mais la bordure de la page
-        # (QAbstractScrollArea de qdarkstyle), d'ou la regle en cascade sur les pages. Le coin
-        # haut-droit aussi : un dernier onglet qui touche le bord droit du volet y descend ; et
-        # ::pane perd sa bordure droite (invisible, mais elle rentrait la page de 1px : le flanc
-        # de cet onglet tombait a cote du bord droit du cadre, mesure au banc le 12/10/2026).
+        # haut-gauche du cadre devient droit sous le flanc du premier onglet ACTIF, sinon son
+        # arrondi de 4px decroche ; en documentMode ce cadre n'est pas ::pane mais la bordure de
+        # la page (QAbstractScrollArea de qdarkstyle), d'ou la regle en cascade sur les pages. Le
+        # coin haut-droit aussi, sous un onglet actif qui touche le bord droit du volet. Ailleurs
+        # les deux coins restent arrondis (« le contour de l'editeur n'a pas les coins haut-gauche
+        # et haut-droit arrondis », l'utilisateur, 01/11/2026) : les proprietes smartos_coin_*
+        # sont posees sur la page par TabBar (patch_spyder_arrondi_onglet.py). ::pane perd sa
+        # bordure droite (invisible, mais elle rentrait la page de 1px : le flanc d'un onglet au
+        # bord droit tombait a cote du bord droit du cadre, mesure au banc le 12/10/2026).
         # padding-bottom compense le soulignement de 3px retire : texte au meme niveau.
         css['QTabWidget::pane'].setValues(
             top='-1px', borderTopLeftRadius='0px', borderRight='0px')
-        css['QAbstractScrollArea'].setValues(
-            borderTopLeftRadius='0px', borderTopRightRadius='0px')
+        css['QAbstractScrollArea[smartos_coin_gauche="true"]'].setValues(
+            borderTopLeftRadius='0px')
+        css['QAbstractScrollArea[smartos_coin_droit="true"]'].setValues(
+            borderTopRightRadius='0px')
         css[f'QTabBar{self.OBJECT_NAME}'].setValues(background='transparent')
         css[f'QTabBar{self.OBJECT_NAME}::tab'].setValues(
             marginBottom='1px', background='transparent', borderBottomColor='transparent')
